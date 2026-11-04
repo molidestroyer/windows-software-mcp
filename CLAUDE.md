@@ -88,7 +88,9 @@ on Windows.
 - MCP smoke scripts: drive `%LOCALAPPDATA%\SoftwareDock\current\SoftwareDock.Mcp.exe --read-only` from
   PowerShell. Python from the Python Install Manager (MSIX) virtualizes `%LOCALAPPDATA%` and gets
   `WinError 2` launching it. `SoftwareDock.exe` is a WinExe: `--print-config` lives on `SoftwareDock.Mcp.exe`.
-- Self-update check: run the installed older version; the delta lands in `packages\` after ~65 s.
+- Self-update check: run the installed older version; wait for `packages\SoftwareDock-<new>-full.nupkg`
+  (~70 s; the delta appears first and is rebuilt into the full). Applying before the full exists
+  re-applies the old version.
 
 ## Known limits
 
