@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SoftwareDock.Domain</RootNamespace>
+    <Description>Pure model of installed software, packages and the rules that reconcile them. No I/O.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SoftwareDock.Domain.Tests" />
+  </ItemGroup>
+</Project>
