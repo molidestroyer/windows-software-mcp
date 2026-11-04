@@ -127,7 +127,7 @@ public sealed class StartupAndInsightsTests : IDisposable
     [Fact]
     public async Task UpgradeMany_SkipsAppsWithoutAnUpgrade()
     {
-        using var operations = new SoftwareDock.Application.Operations.SoftwareOperations(_inventory, _packages, new FakeUninstaller(), NullLogger<SoftwareDock.Application.Operations.SoftwareOperations>.Instance);
+        using var operations = new SoftwareDock.Application.Operations.SoftwareOperations(_inventory, _packages, new FakeUninstaller(), _registry, new FakeProcesses(), TimeProvider.System, NullLogger<SoftwareDock.Application.Operations.SoftwareOperations>.Instance);
         var discord = ApplicationKey.ForRegistry(InstallScope.Machine, RegistryView.Native64, "Discord");
         var firefox = ApplicationKey.ForRegistry(InstallScope.Machine, RegistryView.Native64, "Firefox");
 

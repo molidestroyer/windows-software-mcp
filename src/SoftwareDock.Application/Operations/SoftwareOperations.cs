@@ -16,18 +16,29 @@ public sealed partial class SoftwareOperations : ISoftwareOperations, IDisposabl
     private readonly ISoftwareInventory _inventory;
     private readonly IPackageManager _packageManager;
     private readonly IUninstallerLauncher _uninstaller;
+    private readonly IInstalledApplicationSource _registry;
+    private readonly ISystemMonitor _system;
+    private readonly TimeProvider _time;
     private readonly ILogger<SoftwareOperations> _logger;
+    private static readonly TimeSpan HandOffPoll = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan HandOffLimit = TimeSpan.FromMinutes(10);
     private readonly SemaphoreSlim _queue = new(1, 1);
 
     public SoftwareOperations(
         ISoftwareInventory inventory,
         IPackageManager packageManager,
         IUninstallerLauncher uninstaller,
+        IInstalledApplicationSource registry,
+        ISystemMonitor system,
+        TimeProvider time,
         ILogger<SoftwareOperations> logger)
     {
         _inventory = inventory;
         _packageManager = packageManager;
         _uninstaller = uninstaller;
+        _registry = registry;
+        _system = system;
+        _time = time;
         _logger = logger;
     }
 
@@ -153,12 +164,66 @@ public sealed partial class SoftwareOperations : ISoftwareOperations, IDisposabl
         LogUninstallPlan(application.Name, plan.Kind, plan.Silent);
         return await RunExclusiveAsync(
             $"Uninstall {application.Name}",
-            ct => plan.Kind switch
+            async ct =>
             {
-                UninstallKind.PackageManager => _packageManager.UninstallAsync(application.PackageId!, plan.Silent, progress, ct),
-                _ => _uninstaller.RunAsync(plan.Command!, plan.Silent, ct),
+                var result = await (plan.Kind switch
+                {
+                    UninstallKind.PackageManager => _packageManager.UninstallAsync(application.PackageId!, plan.Silent, progress, ct),
+                    _ => _uninstaller.RunAsync(plan.Command!, plan.Silent, ct),
+                });
+                return result.IsSuccess && application.Origin == ApplicationOrigin.Registry
+                    ? await AwaitHandOffAsync(application, result, progress, ct)
+                    : result;
             },
             cancellationToken);
+    }
+
+    /// <summary>
+    /// Inno Setup and NSIS uninstallers copy themselves to %TEMP%, relaunch from there and exit at
+    /// once (QA, 0.3.2): the app was still listed and the panel hid when the real uninstaller window
+    /// took the focus. While the entry is still registered and something runs from %TEMP%, keep the
+    /// operation open; the queue stays held, so nothing else starts meanwhile.
+    /// </summary>
+    private async Task<OperationResult> AwaitHandOffAsync(
+        InstalledApplication application,
+        OperationResult result,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken)
+    {
+        // ponytail: any process under %TEMP% counts as the hand-off, capped at 10 min; match the
+        // uninstaller's own process tree if unrelated temp processes ever keep the queue waiting.
+        var deadline = _time.GetUtcNow() + HandOffLimit;
+        var waited = false;
+        while (HandOffRunning() && _time.GetUtcNow() < deadline)
+        {
+            if (!await StillRegisteredAsync(application.Key, cancellationToken))
+            {
+                return result;
+            }
+
+            if (!waited)
+            {
+                progress?.Report("Waiting for the uninstaller window to finish…");
+                waited = true;
+            }
+
+            await Task.Delay(HandOffPoll, _time, cancellationToken);
+        }
+
+        return waited && await StillRegisteredAsync(application.Key, cancellationToken)
+            ? OperationResult.Failure($"{application.Name} is still installed: its uninstaller did not finish (closed, or still open after 10 minutes).")
+            : result;
+    }
+
+    private async Task<bool> StillRegisteredAsync(ApplicationKey key, CancellationToken cancellationToken) =>
+        (await _registry.GetInstalledApplicationsAsync(cancellationToken)).Any(a => a.Key == key);
+
+    private bool HandOffRunning()
+    {
+        var temp = ApplicationRoots.NormalizePath(Path.GetTempPath(), isDirectory: true);
+        return temp is not null && _system.GetProcesses()
+            .Select(p => ApplicationRoots.NormalizePath(p.ImagePath))
+            .Any(path => path is not null && path.StartsWith(temp, StringComparison.Ordinal));
     }
 
     private static async Task<BatchResult> RunBatchAsync<TItem>(

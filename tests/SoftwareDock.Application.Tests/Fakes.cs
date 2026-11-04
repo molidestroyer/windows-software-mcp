@@ -67,6 +67,24 @@ internal sealed class FakeUninstaller : IUninstallerLauncher
     }
 }
 
+internal sealed class FakeProcesses : ISystemMonitor
+{
+    public List<string> ImagePaths { get; } = [];
+
+    public int ProcessorCount => 1;
+
+    public IReadOnlyList<Domain.Monitoring.ProcessSample> GetProcesses() =>
+        ImagePaths.Select((p, i) => new Domain.Monitoring.ProcessSample(i + 1, p, TimeSpan.Zero, 0)).ToList();
+
+    public Domain.Monitoring.MemoryStatus GetMemoryStatus() => new(1, 1);
+}
+
+/// <summary><see cref="Progress{T}"/> posts asynchronously; tests need the reports in order, now.</summary>
+internal sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
+{
+    public void Report(T value) => report(value);
+}
+
 internal static class Apps
 {
     public static InstalledApplication Registry(string subKey, string name, string? uninstall = null, string? quiet = null, string? version = "1.0")

@@ -25,7 +25,7 @@ public sealed class BatchOperationsTests : IDisposable
         }
 
         _inventory = new SoftwareInventory(_registry, _packages, TimeProvider.System, Options.Create(new InventoryOptions()), NullLogger<SoftwareInventory>.Instance);
-        _sut = new SoftwareOperations(_inventory, _packages, new FakeUninstaller(), NullLogger<SoftwareOperations>.Instance);
+        _sut = new SoftwareOperations(_inventory, _packages, new FakeUninstaller(), _registry, new FakeProcesses(), TimeProvider.System, NullLogger<SoftwareOperations>.Instance);
     }
 
     public void Dispose()
@@ -98,12 +98,6 @@ public sealed class BatchOperationsTests : IDisposable
 
         Assert.Equal(1, result.Failed);
         Assert.True(result.Items[1].WasSkipped);
-    }
-
-    /// <summary><see cref="Progress{T}"/> posts asynchronously; tests need the reports in order, now.</summary>
-    private sealed class SyncProgress<T>(Action<T> report) : IProgress<T>
-    {
-        public void Report(T value) => report(value);
     }
 
     private sealed class ScriptedPackageManager : IPackageManager

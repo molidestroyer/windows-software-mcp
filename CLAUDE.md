@@ -77,6 +77,10 @@ on Windows.
 - **The app targets `net10.0-windows10.0.19041.0`** (toasts); tests for it target the same TFM.
 - **Anchored panel + dialogs:** wrap any picker/dialog in `DockWindow.SuspendAutoHide()`, or the
   panel hides when the dialog takes focus.
+- **Uninstall hand-off** (`SoftwareOperations.AwaitHandOffAsync`): Inno/NSIS uninstallers relaunch
+  from `%TEMP%` and exit at once. After a "success", while the ARP entry is still there and any
+  process runs from `%TEMP%`, the operation (and the queue) stays open, max 10 min. No temp process →
+  return at once with no extra registry read (`UninstallMany_ResolvesTheInventoryOnce`).
 - **Anchored panel never auto-hides while `IsBusy`:** installers, WinGet and UAC steal the focus
   mid-operation. Headless tests raise `Deactivated` by reflection (it is internal in Avalonia 12).
 
@@ -100,8 +104,6 @@ on Windows.
 
 ## Known limits
 
-- Inno Setup / some NSIS uninstallers relaunch from `%TEMP%` and exit at once; the inventory may
-  still list the app until the next refresh.
 - Silent uninstall of a per-machine MSI uses `msiexec /X… /passive` (fixed in 0.3.0): `/qn`, and so
   `winget uninstall --silent`, cannot raise UAC and fails with 1603 from a non-elevated process.
 - Some Inno uninstallers run via WinGet's `/SILENT` take minutes (TreeSize Free: 6.5 min); the MCP

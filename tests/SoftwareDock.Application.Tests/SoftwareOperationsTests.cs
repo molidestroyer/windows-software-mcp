@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Time.Testing;
 using SoftwareDock.Application.Inventory;
 using SoftwareDock.Application.Operations;
 using SoftwareDock.Domain.Applications;
@@ -15,13 +16,15 @@ public sealed class SoftwareOperationsTests : IDisposable
     private readonly FakeRegistry _registry = new();
     private readonly FakePackageManager _packages = new();
     private readonly FakeUninstaller _uninstaller = new();
+    private readonly FakeProcesses _processes = new();
+    private readonly FakeTimeProvider _time = new();
     private readonly SoftwareInventory _inventory;
     private readonly SoftwareOperations _sut;
 
     public SoftwareOperationsTests()
     {
         _inventory = new SoftwareInventory(_registry, _packages, TimeProvider.System, Options.Create(new InventoryOptions()), NullLogger<SoftwareInventory>.Instance);
-        _sut = new SoftwareOperations(_inventory, _packages, _uninstaller, NullLogger<SoftwareOperations>.Instance);
+        _sut = new SoftwareOperations(_inventory, _packages, _uninstaller, _registry, _processes, _time, NullLogger<SoftwareOperations>.Instance);
     }
 
     public void Dispose()
@@ -165,12 +168,58 @@ public sealed class SoftwareOperationsTests : IDisposable
         Assert.Equal(2, _registry.Reads);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Uninstall_HandedOffToTemp_WaitsUntilTheEntryIsGone(bool finishes)
+    {
+        // Inno/NSIS: unins000.exe relaunches from %TEMP% and exits at once (QA, 0.3.2).
+        _registry.Entries.Add(Apps.Registry("App_is1", "Inno app", uninstall: @"""C:\Apps\Inno\unins000.exe"""));
+        _processes.ImagePaths.Add(Path.Combine(Path.GetTempPath(), "is-QA123.tmp", "unins000.tmp"));
+        var lines = new List<string>();
+
+        var uninstall = _sut.UninstallAsync(Key("App_is1"), UninstallMode.Interactive, new SyncProgress<string>(lines.Add), CancellationToken.None);
+        for (var i = 0; i < 3; i++)
+        {
+            await Task.Delay(20);
+            _time.Advance(TimeSpan.FromSeconds(2));
+        }
+
+        Assert.False(uninstall.IsCompleted);
+        Assert.Equal(["Waiting for the uninstaller window to finish…"], lines);
+
+        _processes.ImagePaths.Clear();
+        if (finishes)
+        {
+            _registry.Entries.Clear();
+        }
+
+        _time.Advance(TimeSpan.FromSeconds(2));
+        var result = await uninstall.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(finishes, result.IsSuccess);
+        if (!finishes)
+        {
+            Assert.Contains("did not finish", result.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task Uninstall_NoHandOff_ReturnsAtOnceEvenIfTheEntryLingers()
+    {
+        _registry.Entries.Add(Apps.Registry("App_is1", "Inno app", uninstall: @"""C:\Apps\Inno\unins000.exe"""));
+
+        var result = await _sut.UninstallAsync(Key("App_is1"), UninstallMode.Interactive, null, CancellationToken.None);
+
+        Assert.True(result.IsSuccess);
+    }
+
     [Fact]
     public async Task Operations_RunOneAtATime()
     {
         var gate = new BlockingPackageManager();
         using var inventory = new SoftwareInventory(_registry, gate, TimeProvider.System, Options.Create(new InventoryOptions()), NullLogger<SoftwareInventory>.Instance);
-        using var sut = new SoftwareOperations(inventory, gate, _uninstaller, NullLogger<SoftwareOperations>.Instance);
+        using var sut = new SoftwareOperations(inventory, gate, _uninstaller, _registry, _processes, _time, NullLogger<SoftwareOperations>.Instance);
 
         var first = sut.InstallAsync(new InstallRequest(PackageId.Parse("A.A")), null, CancellationToken.None);
         var second = sut.InstallAsync(new InstallRequest(PackageId.Parse("B.B")), null, CancellationToken.None);
