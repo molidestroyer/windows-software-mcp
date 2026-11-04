@@ -60,6 +60,8 @@ on Windows.
 - **WinGet manifests are templates** (`packaging/winget/`), used only for the first submission;
   later versions go through `wingetcreate update`. `ProductCode` is Velopack's `--packId`
   (`SoftwareDock`): renaming the pack id breaks WinGet's match with the installed app.
+  Each template's first line is its `# yaml-language-server: $schema=…` header (wingetcreate fails
+  with "Schema header not found" otherwise). Check locally: render, then `winget validate --manifest <dir>`.
 - **Startup changes go through `StartupApproved`**, never by deleting Run values or shortcuts.
 - **Security alerts only for apps with an update pending**; KEV names products, not versions. Keep
   the matching strict and the wording "exploited", never "vulnerable".
