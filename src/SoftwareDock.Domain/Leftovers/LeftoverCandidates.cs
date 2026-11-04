@@ -22,6 +22,11 @@ public sealed record KnownFolders(string ProgramFiles, string ProgramFilesX86, s
 ///   <item>a candidate that is, contains or lies inside the folder of an installed application is dropped;</item>
 ///   <item>name-based candidates are dropped altogether when an installed application shares the
 ///         cleaned name (VC++ x86/x64, two Pythons, two versions of a tool) — the folder is theirs too.</item>
+///   <item>a name-based candidate that <em>contains</em> the removed application's own install folder
+///         is a shared container (<c>%LOCALAPPDATA%\Python</c> around <c>…\pythoncore-3.14-64</c>, which
+///         also holds the Python Install Manager's <c>bin</c> on PATH): only the install folder is offered.</item>
+///   <item>anything that is, contains or lies inside a folder in use — on PATH, or where a running
+///         process lives — is dropped, whoever owns it.</item>
 /// </list>
 /// </remarks>
 public static partial class LeftoverCandidates
@@ -29,7 +34,12 @@ public static partial class LeftoverCandidates
     /// <param name="application">The application that was removed.</param>
     /// <param name="folders">Well-known folders of this user.</param>
     /// <param name="stillInstalled">Every application still installed; any of them can veto a candidate.</param>
-    public static IReadOnlyList<string> For(InstalledApplication application, KnownFolders folders, IReadOnlyCollection<InstalledApplication> stillInstalled)
+    /// <param name="foldersInUse">Folders on PATH and folders of running processes; any of them vetoes a candidate.</param>
+    public static IReadOnlyList<string> For(
+        InstalledApplication application,
+        KnownFolders folders,
+        IReadOnlyCollection<InstalledApplication> stillInstalled,
+        IEnumerable<string>? foldersInUse = null)
     {
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(folders);
@@ -40,12 +50,22 @@ public static partial class LeftoverCandidates
             .SelectMany(a => new[] { ApplicationRoots.RootOf(a), ApplicationRoots.NormalizePath(a.InstallLocation, isDirectory: true) })
             .OfType<string>()
             .Where(f => !ApplicationRoots.IsTooGeneric(f))
+            .Concat((foldersInUse ?? []).Select(f => ApplicationRoots.NormalizePath(f, isDirectory: true)).OfType<string>().Where(f => f.Length > 3))
             .Distinct(StringComparer.Ordinal)
             .ToList();
 
+        var installFolder = ApplicationRoots.RootOf(application);
         return Raw(application, folders, sharesName: others.Any(o => string.Equals(CleanName(o.Name), CleanName(application.Name), StringComparison.OrdinalIgnoreCase)))
             .Where(c => !Overlaps(c, protectedFolders))
+            .Where(c => !IsContainerOf(c, installFolder))
             .ToList();
+    }
+
+    /// <summary>True when <paramref name="candidate"/> strictly contains the application's own install folder.</summary>
+    private static bool IsContainerOf(string candidate, string? installFolder)
+    {
+        var folder = ApplicationRoots.NormalizePath(candidate, isDirectory: true);
+        return installFolder is not null && folder is not null && folder != installFolder && installFolder.StartsWith(folder, StringComparison.Ordinal);
     }
 
     private static bool Overlaps(string candidate, IReadOnlyList<string> protectedFolders)

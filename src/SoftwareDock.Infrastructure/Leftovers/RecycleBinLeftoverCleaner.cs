@@ -12,7 +12,7 @@ namespace SoftwareDock.Infrastructure.Leftovers;
 /// cannot take triggers the shell's own "delete permanently?" prompt rather than a silent delete.
 /// </summary>
 [SupportedOSPlatform("windows")]
-public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
+public sealed partial class RecycleBinLeftoverCleaner(ISystemMonitor system) : ILeftoverCleaner
 {
     private const uint FoDelete = 0x3;
     private const ushort FofSilent = 0x4;
@@ -39,7 +39,7 @@ public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
 
         return Task.Run<IReadOnlyList<LeftoverFolder>>(
-            () => LeftoverCandidates.For(application, folders, stillInstalled)
+            () => LeftoverCandidates.For(application, folders, stillInstalled, FoldersInUse())
                 .Where(Directory.Exists)
                 .Select(path => new LeftoverFolder(path, Measure(path)))
                 .ToList(),
@@ -49,7 +49,14 @@ public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
     public Task<OperationResult> RecycleAsync(IReadOnlyList<LeftoverFolder> folders, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(folders);
-        var existing = folders.Where(f => Directory.Exists(f.Path)).ToList();
+        // Re-checked at the last moment: something may have started from, or been added to PATH
+        // inside, one of these folders since they were offered.
+        var inUse = FoldersInUse().Select(f => ApplicationRoots.NormalizePath(f, isDirectory: true)).OfType<string>().Where(f => f.Length > 3).ToList();
+        var existing = folders
+            .Where(f => Directory.Exists(f.Path))
+            .Where(f => ApplicationRoots.NormalizePath(f.Path, isDirectory: true) is { } path
+                && !inUse.Any(u => u.StartsWith(path, StringComparison.Ordinal) || path.StartsWith(u, StringComparison.Ordinal)))
+            .ToList();
         if (existing.Count == 0)
         {
             return Task.FromResult(OperationResult.Success("Nothing left to clean."));
@@ -77,6 +84,25 @@ public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
                 Marshal.FreeHGlobal(from);
             }
         }, cancellationToken);
+    }
+
+    /// <summary>Folders on the process, user and machine PATH, and folders of running processes.</summary>
+    private IEnumerable<string> FoldersInUse()
+    {
+        var path = string.Join(
+            ';',
+            Environment.GetEnvironmentVariable("PATH") ?? string.Empty,
+            Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? string.Empty,
+            Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.Machine) ?? string.Empty);
+
+        var onPath = path.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(Environment.ExpandEnvironmentVariables);
+        var running = system.GetProcesses()
+            .Select(p => p.ImagePath)
+            .OfType<string>()
+            .Select(Path.GetDirectoryName)
+            .OfType<string>();
+        return onPath.Concat(running).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
     }
 
     private static long Measure(string path)

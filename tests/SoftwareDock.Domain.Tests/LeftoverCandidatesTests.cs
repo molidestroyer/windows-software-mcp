@@ -80,6 +80,35 @@ public class LeftoverCandidatesTests
         Assert.DoesNotContain(@"C:\Program Files\Suite\Thing", LeftoverCandidates.For(plugin, Folders, [suite]));
     }
 
+    // QA, 0.3.0 re-test: a single Python lives in %LOCALAPPDATA%\Python\pythoncore-3.14-64; the parent
+    // also holds the Python Install Manager's bin (python.exe on PATH) and _cache. Only the install folder may go.
+    [Fact]
+    public void AContainerOfTheAppsOwnInstallFolder_IsNeverOffered()
+    {
+        var python = App("Python 3.14.3", "Python Software Foundation", @"C:\Users\m\AppData\Local\Python\pythoncore-3.14-64");
+
+        var candidates = LeftoverCandidates.For(python, Folders, [python]);
+
+        Assert.Contains(@"C:\Users\m\AppData\Local\Python\pythoncore-3.14-64", candidates);
+        Assert.DoesNotContain(@"C:\Users\m\AppData\Local\Python", candidates);
+    }
+
+    [Fact]
+    public void FoldersOnPathOrWithRunningProcesses_VetoCandidates()
+    {
+        var python = App("Python 3.12.7 (64-bit)", "Python Software Foundation");
+
+        var candidates = LeftoverCandidates.For(
+            python,
+            Folders,
+            [],
+            [@"C:\Users\m\AppData\Roaming\Python\Python312\Scripts", @"C:\ProgramData\Python\service", @"C:\"]);
+
+        Assert.DoesNotContain(@"C:\Users\m\AppData\Roaming\Python", candidates);
+        Assert.DoesNotContain(@"C:\ProgramData\Python", candidates);
+        Assert.Contains(@"C:\Users\m\AppData\Local\Python", candidates);
+    }
+
     [Fact]
     public void UnrelatedInstalledApps_DoNotVetoAnything()
     {

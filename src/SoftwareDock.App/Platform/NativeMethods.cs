@@ -55,6 +55,13 @@ internal static partial class NativeMethods
     [LibraryImport("kernel32.dll", EntryPoint = "GetModuleHandleW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial nint GetModuleHandle(string? moduleName);
 
+    /// <summary>ASFW_ANY: any process may take the foreground next.</summary>
+    public const int AllowAnyProcess = -1;
+
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AllowSetForegroundWindow(int processId);
+
     [LibraryImport("shell32.dll", EntryPoint = "ExtractIconExW", StringMarshalling = StringMarshalling.Utf16)]
     public static partial uint ExtractIconEx(string file, int index, out nint largeIcon, out nint smallIcon, uint icons);
 
