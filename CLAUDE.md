@@ -50,6 +50,10 @@ on Windows.
 - **Auto-backup skips partial snapshots** and rewrites only when content changed (`HasSameContentAs`).
 - **`VelopackApp.Build().Run()` must stay the first line of `Main`.** User settings never go in the
   install folder: Velopack replaces it on update.
+- **UI text uses `CurrentCulture`** (`Format`): tests must build expected numbers with the current
+  culture, never hardcode `8.9` (fails on es-ES).
+- **Self-update applies only on *Restart to update*** (checked 1 min after start, then twice a day;
+  downloads delta). Manual equivalent: `%LOCALAPPDATA%\SoftwareDock\Update.exe apply -- --background`.
 - **Anchored panel + dialogs:** wrap any picker/dialog in `DockWindow.SuspendAutoHide()`, or the
   panel hides when the dialog takes focus.
 
@@ -57,5 +61,9 @@ on Windows.
 
 - Inno Setup / some NSIS uninstallers relaunch from `%TEMP%` and exit at once; the inventory may
   still list the app until the next refresh.
+- Silent uninstall of a per-machine MSI from a non-elevated dock fails with 1603 (same with plain
+  `winget uninstall --silent`): quiet MSI cannot raise UAC. Interactive mode or an elevated shell works.
+- Some Inno uninstallers run via WinGet's `/SILENT` take minutes (TreeSize Free: 6.5 min); the MCP
+  call blocks meanwhile.
 - WinGet truncates long ids in its tables; such apps fall back to their registered uninstaller
   and cannot be upgraded from the dock until the COM adapter exists (ADR 0002).
