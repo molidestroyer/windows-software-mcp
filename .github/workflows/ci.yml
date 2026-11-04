@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Test
+        env:
+          SOFTWAREDOCK_SCREENSHOTS: ${{ github.workspace }}/artifacts/screenshots
+        run: dotnet test SoftwareDock.slnx -c Release
+
+      - name: Publish
+        shell: pwsh
+        run: |
+          dotnet publish src/SoftwareDock.App -c Release -r win-x64 --self-contained false -o artifacts/SoftwareDock
+          dotnet publish src/SoftwareDock.Mcp -c Release -r win-x64 --self-contained false -o artifacts/SoftwareDock
+          Compress-Archive -Path artifacts/SoftwareDock/* -DestinationPath artifacts/SoftwareDock-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SoftwareDock-win-x64
+          path: artifacts/SoftwareDock-win-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: artifacts/screenshots
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/SoftwareDock-win-x64.zip
+          generate_release_notes: true
