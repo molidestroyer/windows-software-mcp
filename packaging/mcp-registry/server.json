@@ -1,0 +1,21 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.molidestroyer/software-dock",
+  "title": "Software Dock",
+  "description": "List, update, install and uninstall the software on a Windows PC; running apps, startup apps.",
+  "repository": {
+    "url": "https://github.com/molidestroyer/windows-software-mcp",
+    "source": "github"
+  },
+  "version": "0.0.0",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/molidestroyer/windows-software-mcp/releases/download/v0.0.0/SoftwareDock-mcp-win-x64.mcpb",
+      "fileSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

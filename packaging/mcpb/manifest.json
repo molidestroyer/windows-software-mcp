@@ -1,0 +1,47 @@
+{
+  "manifest_version": "0.3",
+  "name": "software-dock",
+  "display_name": "Software Dock",
+  "version": "0.0.0",
+  "description": "List, update, install and uninstall the software on this Windows PC, see what is running and what starts with Windows.",
+  "long_description": "The software inventory of a Windows PC for AI agents: everything in Settings › Installed apps reconciled with WinGet and the Microsoft Store, pending updates (exploited ones first, from CISA's KEV catalog), running apps with CPU and memory, startup apps, unused apps and a backup in `winget import` format. Install, upgrade and uninstall go through WinGet or the app's own uninstaller, never with guessed silent switches. Requires WinGet (App Installer), preinstalled on current Windows.",
+  "author": {
+    "name": "Miguel Molina",
+    "url": "https://github.com/molidestroyer"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/molidestroyer/windows-software-mcp"
+  },
+  "homepage": "https://github.com/molidestroyer/windows-software-mcp",
+  "documentation": "https://github.com/molidestroyer/windows-software-mcp#connect-an-ai-agent-mcp",
+  "support": "https://github.com/molidestroyer/windows-software-mcp/issues",
+  "icon": "icon.png",
+  "license": "AGPL-3.0-or-later",
+  "keywords": ["windows", "winget", "software", "uninstall", "updates", "startup"],
+  "server": {
+    "type": "binary",
+    "entry_point": "server/SoftwareDock.Mcp.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/SoftwareDock.Mcp.exe",
+      "args": []
+    }
+  },
+  "tools": [
+    { "name": "list_installed_software", "description": "Installed apps with version, available update and key" },
+    { "name": "get_software_details", "description": "Location, date, size and how an app would be uninstalled" },
+    { "name": "search_software_catalog", "description": "Search the WinGet and Microsoft Store catalogs" },
+    { "name": "install_software", "description": "Silent install of a catalog package" },
+    { "name": "upgrade_software", "description": "Upgrade an installed app" },
+    { "name": "uninstall_software", "description": "Remove an installed app" },
+    { "name": "list_running_software", "description": "Running apps with CPU and memory, heaviest first" },
+    { "name": "export_software_backup", "description": "Backup JSON, also in winget import format" },
+    { "name": "get_security_advisories", "description": "Apps with pending updates that are actively exploited (CISA KEV)" },
+    { "name": "list_unused_software", "description": "Apps not opened for N days, largest first" },
+    { "name": "list_startup_apps", "description": "What starts with Windows and which app it belongs to" },
+    { "name": "set_startup_app_enabled", "description": "Enable or disable a startup app like Task Manager does" }
+  ],
+  "compatibility": {
+    "platforms": ["win32"]
+  }
+}
