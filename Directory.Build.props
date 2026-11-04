@@ -1,0 +1,22 @@
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- CS1591: public members are documented where the intent is not obvious, not mechanically. -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
+    <!-- Lets the Windows-only projects (WPF, registry) build and be tested from Linux CI too. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Authors>Miguel Molina</Authors>
+    <Product>Software Dock</Product>
+    <Copyright>Copyright © Miguel Molina</Copyright>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/molidestroyer/windows-software-mcp</RepositoryUrl>
+    <Version>0.1.0</Version>
+  </PropertyGroup>
+</Project>

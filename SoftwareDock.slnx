@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SoftwareDock.Domain/SoftwareDock.Domain.csproj" />
+    <Project Path="src/SoftwareDock.Application/SoftwareDock.Application.csproj" />
+    <Project Path="src/SoftwareDock.Infrastructure/SoftwareDock.Infrastructure.csproj" />
+    <Project Path="src/SoftwareDock.Mcp/SoftwareDock.Mcp.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SoftwareDock.Domain.Tests/SoftwareDock.Domain.Tests.csproj" />
+    <Project Path="tests/SoftwareDock.Application.Tests/SoftwareDock.Application.Tests.csproj" />
+    <Project Path="tests/SoftwareDock.Infrastructure.Tests/SoftwareDock.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>
