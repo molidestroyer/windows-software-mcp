@@ -47,8 +47,8 @@ Things to check on the first PR:
 ### MCP Registry
 
 Nothing to set up: the job logs in with the workflow's GitHub identity, which owns the
-`io.github.molidestroyer/*` namespace. A version can be published only once; re-running the
-workflow for the same version fails at that step and changes nothing.
+`io.github.molidestroyer/*` namespace. A version can be published only once, so re-running the
+workflow (say, to retry WinGet) keeps the bundle already attached and skips the registry.
 
 ## Code signing (pending)
 

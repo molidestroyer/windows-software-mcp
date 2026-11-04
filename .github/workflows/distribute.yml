@@ -48,7 +48,22 @@ jobs:
           global-json-file: release/global.json
 
       # Self-contained, like the release: the bundle runs on a PC with nothing but Windows and WinGet.
+      # A published bundle is never rebuilt: the MCP Registry records its hash, and a rebuild
+      # would not be byte-identical. Re-running the workflow (e.g. for WinGet) leaves it alone.
+      - name: Bundle already attached?
+        id: existing
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $assets = gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw "Release v$env:VERSION not found" }
+          $exists = [bool]($assets | Where-Object { $_ -eq $env:MCPB_FILE })
+          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "$env:MCPB_FILE already attached: $exists"
+
       - name: Pack the MCP bundle
+        if: steps.existing.outputs.exists != 'true'
         shell: pwsh
         run: |
           $dir = 'artifacts/mcpb'
@@ -64,10 +79,11 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'mcpb pack failed' }
 
       - name: Attach the bundle to the release
+        if: steps.existing.outputs.exists != 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "v$env:VERSION" "artifacts/$env:MCPB_FILE" --clobber --repo $env:GITHUB_REPOSITORY
+        run: gh release upload "v$env:VERSION" "artifacts/$env:MCPB_FILE" --repo $env:GITHUB_REPOSITORY
 
   mcp-registry:
     needs: mcpb
@@ -108,7 +124,16 @@ jobs:
       - name: Publish to the MCP Registry
         run: |
           ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+          # A version can be published once; a re-run of the workflow must not fail here.
+          if ! out="$(./mcp-publisher publish 2>&1)"; then
+            echo "$out"
+            if grep -qi 'already' <<<"$out"; then
+              echo "::notice::$VERSION is already in the MCP Registry."
+              exit 0
+            fi
+            exit 1
+          fi
+          echo "$out"
 
   winget:
     runs-on: windows-latest
