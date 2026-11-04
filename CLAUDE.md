@@ -85,6 +85,10 @@ on Windows.
 - Do not run *Scheduled updates* or *Update all* against the real machine without the user's OK:
   they really update every app. Use `--demo` (settings in memory, toasts recorded) for UI checks.
 - Unit and integration tests never touch real user folders: fakes, `--demo`, or `Path.GetTempPath()`.
+- MCP smoke scripts: drive `%LOCALAPPDATA%\SoftwareDock\current\SoftwareDock.Mcp.exe --read-only` from
+  PowerShell. Python from the Python Install Manager (MSIX) virtualizes `%LOCALAPPDATA%` and gets
+  `WinError 2` launching it. `SoftwareDock.exe` is a WinExe: `--print-config` lives on `SoftwareDock.Mcp.exe`.
+- Self-update check: run the installed older version; the delta lands in `packages\` after ~65 s.
 
 ## Known limits
 
