@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>SoftwareDock.Infrastructure</RootNamespace>
+    <Description>Adapters for Windows: the Uninstall registry keys, the WinGet CLI and the registered uninstallers.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SoftwareDock.Application\SoftwareDock.Application.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="SoftwareDock.Infrastructure.Tests" />
+  </ItemGroup>
+</Project>
