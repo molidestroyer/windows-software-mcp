@@ -7,8 +7,9 @@ public class McpServerTests
 {
     private static readonly string[] AllTools =
     [
-        "export_software_backup", "get_software_details", "install_software", "list_installed_software",
-        "list_running_software", "search_software_catalog", "uninstall_software", "upgrade_software",
+        "export_software_backup", "get_security_advisories", "get_software_details", "install_software",
+        "list_installed_software", "list_running_software", "list_startup_apps", "list_unused_software",
+        "search_software_catalog", "set_startup_app_enabled", "uninstall_software", "upgrade_software",
     ];
 
     [Fact]
@@ -44,7 +45,8 @@ public class McpServerTests
         var tools = await server.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
 
         Assert.Equal(
-            ["export_software_backup", "get_software_details", "list_installed_software", "list_running_software", "search_software_catalog"],
+            ["export_software_backup", "get_security_advisories", "get_software_details", "list_installed_software",
+             "list_running_software", "list_startup_apps", "list_unused_software", "search_software_catalog"],
             tools.Select(t => t.Name).Order(StringComparer.Ordinal));
         Assert.Contains("read-only", server.Client.ServerInstructions, StringComparison.Ordinal);
     }
@@ -142,6 +144,44 @@ public class McpServerTests
         Assert.NotEqual(true, result.IsError);
         Assert.Contains(marker, Text(result), StringComparison.Ordinal);
         Assert.Contains("Git.Git", Text(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task StartupApps_AreListedWithTheirAppAndCanBeDisabled()
+    {
+        await using var server = await McpServerFixture.StartAsync();
+
+        var list = await server.CallAsync("list_startup_apps", []);
+        using var json = JsonDocument.Parse(Text(list));
+        var entry = json.RootElement[0];
+        Assert.Equal("Git", entry.GetProperty("name").GetString());
+
+        await server.CallAsync("set_startup_app_enabled", new() { ["id"] = entry.GetProperty("id").GetString(), ["enabled"] = false });
+
+        Assert.Equal(["startup GitUpdater=False"], server.Machine.Calls);
+    }
+
+    [Fact]
+    public async Task SecurityAdvisories_FlagExploitedAppsWithUpdates()
+    {
+        await using var server = await McpServerFixture.StartAsync();
+
+        var result = await server.CallAsync("get_security_advisories", []);
+
+        Assert.Contains("CVE-2026-4242", Text(result), StringComparison.Ordinal);
+        Assert.Contains(FakeMachine.GitKey.Value.Replace(@"\", @"\\", StringComparison.Ordinal), Text(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnusedSoftware_ListsAppsNotOpenedForMonths()
+    {
+        await using var server = await McpServerFixture.StartAsync();
+
+        var result = await server.CallAsync("list_unused_software", new() { ["days"] = 90 });
+
+        using var json = JsonDocument.Parse(Text(result));
+        Assert.True(json.RootElement[0].GetProperty("daysUnused").GetInt32() >= 199);
+        Assert.Equal(300, json.RootElement[0].GetProperty("sizeMb").GetInt64());
     }
 
     [Fact]

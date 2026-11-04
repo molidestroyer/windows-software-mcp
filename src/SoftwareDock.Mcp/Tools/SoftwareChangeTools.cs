@@ -3,13 +3,14 @@ using ModelContextProtocol;
 using ModelContextProtocol.Server;
 using SoftwareDock.Application.Abstractions;
 using SoftwareDock.Application.Operations;
+using SoftwareDock.Application.Startup;
 using SoftwareDock.Domain.Packages;
 
 namespace SoftwareDock.Mcp.Tools;
 
 /// <summary>Tools that change the machine. Not registered when the server runs with <c>--read-only</c>.</summary>
 [McpServerToolType]
-public sealed class SoftwareChangeTools(ISoftwareOperations operations)
+public sealed class SoftwareChangeTools(ISoftwareOperations operations, StartupManager startup)
 {
     [McpServerTool(Name = "install_software", Title = "Install software", Destructive = false, Idempotent = true, OpenWorld = true)]
     [Description("Installs a package from the catalog, silently. Confirm with the user first. Windows may ask them to approve elevation.")]
@@ -43,6 +44,18 @@ public sealed class SoftwareChangeTools(ISoftwareOperations operations)
             silent ? UninstallMode.Silent : UninstallMode.Interactive,
             Relay(progress),
             cancellationToken));
+
+    [McpServerTool(Name = "set_startup_app_enabled", Title = "Enable or disable a startup app", Destructive = false, Idempotent = true, OpenWorld = false)]
+    [Description("Enables or disables a startup app exactly like Task Manager does (nothing is deleted; it can be re-enabled). Entries for all users need the dock to run as administrator. Confirm with the user first.")]
+    public async Task<OperationResultDto> SetStartupAppEnabledAsync(
+        [Description("The `id` returned by list_startup_apps.")] string id,
+        [Description("true to start with Windows, false to stop.")] bool enabled,
+        CancellationToken cancellationToken = default)
+    {
+        var entry = (await startup.ListAsync(cancellationToken)).FirstOrDefault(e => string.Equals(e.Item.Id, id, StringComparison.OrdinalIgnoreCase))
+            ?? throw new McpException($"No startup app has the id '{id}'. Call list_startup_apps to get current ids.");
+        return OperationResultDto.From(await startup.SetEnabledAsync(entry.Item, enabled, cancellationToken));
+    }
 
     private static async Task<OperationResultDto> RunAsync(Func<Task<Domain.Operations.OperationResult>> operation)
     {
