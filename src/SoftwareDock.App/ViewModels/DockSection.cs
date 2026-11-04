@@ -5,4 +5,5 @@ public enum DockSection
     Installed,
     Updates,
     Discover,
+    Startup,
 }

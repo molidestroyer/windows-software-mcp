@@ -50,6 +50,7 @@ public static class AppHost
             services.AddSingleton<IStartupRegistration, UnsupportedStartupRegistration>();
             services.TryAddSingleton<IUserSettingsStore>(new InMemoryUserSettingsStore(new UserSettings { AutomaticBackup = false }));
             services.AddSingleton<IAppUpdater, NoAppUpdater>();
+            services.TryAddSingleton<INotifier, RecordingNotifier>();
         }
         else
         {
@@ -58,6 +59,14 @@ public static class AppHost
             services.AddSingleton<IStartupRegistration, RunKeyStartupRegistration>();
             services.TryAddSingleton<IUserSettingsStore, JsonFileUserSettingsStore>();
             services.AddSingleton<IAppUpdater, VelopackAppUpdater>();
+            if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
+            {
+                services.TryAddSingleton<INotifier, ToastNotifier>();
+            }
+            else
+            {
+                services.TryAddSingleton<INotifier, RecordingNotifier>();
+            }
         }
 
         services.AddSingleton<AutoBackup>();

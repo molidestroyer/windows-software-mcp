@@ -10,13 +10,18 @@ using SoftwareDock.App.Settings;
 using SoftwareDock.App.Shell;
 using SoftwareDock.Application.Abstractions;
 using SoftwareDock.Application.Backup;
+using SoftwareDock.Application.Insights;
 using SoftwareDock.Application.Inventory;
 using SoftwareDock.Application.Monitoring;
 using SoftwareDock.Application.Operations;
+using SoftwareDock.Application.Startup;
 using SoftwareDock.Domain.Applications;
 using SoftwareDock.Domain.Backup;
 using SoftwareDock.Domain.Operations;
 using SoftwareDock.Domain.Packages;
+using SoftwareDock.Domain.Security;
+using SoftwareDock.Domain.Updates;
+using SoftwareDock.Domain.Usage;
 
 namespace SoftwareDock.App.ViewModels;
 
@@ -35,18 +40,23 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     private readonly ResourceMonitor _monitor;
     private readonly SoftwareBackup _backup;
     private readonly IAppUpdater _updater;
+    private readonly SoftwareInsights _insights;
+    private readonly ILeftoverCleaner _leftovers;
+    private readonly TimeProvider _time;
     private readonly ILogger<DockViewModel> _logger;
     private readonly Dictionary<ApplicationKey, ApplicationItemViewModel> _items = [];
 
     private InventorySnapshot? _snapshot;
     private ResourceSnapshot _usage = ResourceSnapshot.Empty;
+    private IReadOnlyDictionary<ApplicationKey, SecurityAdvisory> _advisories = new Dictionary<ApplicationKey, SecurityAdvisory>();
+    private IReadOnlyDictionary<ApplicationKey, ApplicationUsage> _lastUsed = new Dictionary<ApplicationKey, ApplicationUsage>();
     private CancellationTokenSource? _searchCancellation;
     private CancellationTokenSource? _monitorCancellation;
     private AppUpdate? _pendingAppUpdate;
     private int _runningOperations;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsInstalledSection), nameof(IsUpdatesSection), nameof(IsDiscoverSection), nameof(IsEmpty), nameof(EmptyMessage), nameof(SearchWatermark), nameof(ShowUpdateAll), nameof(ShowListToolbar))]
+    [NotifyPropertyChangedFor(nameof(IsInstalledSection), nameof(IsUpdatesSection), nameof(IsDiscoverSection), nameof(IsStartupSection), nameof(IsAppListSection), nameof(IsEmpty), nameof(EmptyMessage), nameof(SearchWatermark), nameof(ShowUpdateAll), nameof(ShowListToolbar), nameof(ShowSearch))]
     private DockSection _selectedSection;
 
     [ObservableProperty]
@@ -110,6 +120,14 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     [NotifyPropertyChangedFor(nameof(HasAppUpdate))]
     private string? _appUpdateText;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasLeftoverOffer))]
+    private LeftoverOfferViewModel? _leftoverOffer;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSecurityUpdates), nameof(UpdateBanner))]
+    private int _securityUpdateCount;
+
     public DockViewModel(
         ISoftwareInventory inventory,
         ISoftwareOperations operations,
@@ -119,6 +137,10 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         ResourceMonitor monitor,
         SoftwareBackup backup,
         IAppUpdater updater,
+        SoftwareInsights insights,
+        ILeftoverCleaner leftovers,
+        StartupManager startup,
+        TimeProvider time,
         SettingsViewModel settingsPage,
         IOptions<DockOptions> options,
         ILogger<DockViewModel> logger)
@@ -133,8 +155,12 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         _monitor = monitor;
         _backup = backup;
         _updater = updater;
+        _insights = insights;
+        _leftovers = leftovers;
+        _time = time;
         _logger = logger;
         SettingsPage = settingsPage;
+        StartupPage = new StartupPageViewModel(startup, SetStatus);
         HotkeyText = HotkeyGesture.TryParse(options.Value.Hotkey, out var gesture) ? gesture!.Display : null;
         _selectedSort = SortOption.All.First(o => o.Order == settings.Current.SortOrder);
 
@@ -149,6 +175,13 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     public event EventHandler? CloseRequested;
 
     public SettingsViewModel SettingsPage { get; }
+
+    public StartupPageViewModel StartupPage { get; }
+
+    /// <summary>The last inventory shown. The shell reads it to decide what to announce.</summary>
+    public InventorySnapshot? Snapshot => _snapshot;
+
+    public IReadOnlyDictionary<ApplicationKey, SecurityAdvisory> Advisories => _advisories;
 
     public ObservableCollection<ApplicationItemViewModel> Applications { get; } = [];
 
@@ -190,11 +223,28 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         set => SelectIf(value, DockSection.Discover);
     }
 
-    public bool ShowListToolbar => SelectedSection != DockSection.Discover;
+    public bool IsStartupSection
+    {
+        get => SelectedSection == DockSection.Startup;
+        set => SelectIf(value, DockSection.Startup);
+    }
+
+    /// <summary>Installed or Updates: the sections that show installed applications.</summary>
+    public bool IsAppListSection => SelectedSection is DockSection.Installed or DockSection.Updates;
+
+    public bool ShowListToolbar => IsAppListSection;
+
+    public bool ShowSearch => SelectedSection != DockSection.Startup;
+
+    public bool HasLeftoverOffer => LeftoverOffer is not null;
+
+    public bool HasSecurityUpdates => SecurityUpdateCount > 0;
 
     public bool ShowUpdateAll => SelectedSection == DockSection.Updates && HasUpdates;
 
-    public string UpdateBanner => $"{UpdateCount} update{(UpdateCount == 1 ? string.Empty : "s")} ready to install";
+    public string UpdateBanner => SecurityUpdateCount > 0
+        ? $"{UpdateCount} update{(UpdateCount == 1 ? string.Empty : "s")} · {SecurityUpdateCount} under active attack"
+        : $"{UpdateCount} update{(UpdateCount == 1 ? string.Empty : "s")} ready to install";
 
     public bool ShowBulkBar => IsSelecting && SelectedCount > 0;
 
@@ -208,13 +258,19 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         ? "Search WinGet and the Microsoft Store…"
         : "Filter installed apps…";
 
-    public bool IsEmpty => !IsLoading && !IsSearching && (SelectedSection == DockSection.Discover ? CatalogResults.Count == 0 : Applications.Count == 0);
+    public bool IsEmpty => !IsLoading && !IsSearching && SelectedSection switch
+    {
+        DockSection.Discover => CatalogResults.Count == 0,
+        DockSection.Startup => false,
+        _ => Applications.Count == 0,
+    };
 
     public string EmptyMessage => SelectedSection switch
     {
         DockSection.Discover when SearchText.Trim().Length < MinimumQueryLength => "Type to search for something new to install.",
         DockSection.Discover => $"Nothing in the catalog matches “{SearchText.Trim()}”.",
         DockSection.Updates when string.IsNullOrWhiteSpace(SearchText) => "Everything is up to date.",
+        DockSection.Startup => string.Empty,
         _ when !string.IsNullOrWhiteSpace(SearchText) => $"No installed app matches “{SearchText.Trim()}”.",
         _ => "No applications found.",
     };
@@ -408,6 +464,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         }
 
         await LoadAsync();
+        await OfferLeftoversAsync(selected.Select(i => i.Model).ToList());
     }
 
     [RelayCommand]
@@ -419,11 +476,54 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// The unattended run behind "Scheduled updates": refreshes, then upgrades every actionable app
+    /// (pinned apps and skipped versions excluded) in one queue.
+    /// </summary>
+    public async Task<BatchResult> RunScheduledUpdatesAsync(CancellationToken cancellationToken)
+    {
+        var snapshot = await _inventory.GetSnapshotAsync(forceRefresh: true, cancellationToken);
+        Apply(snapshot);
+        var rules = _settings.Current.UpdateRules;
+        var keys = snapshot.Applications.Where(a => a.CanUpgrade && rules.IsActionable(a)).Select(a => a.Key).ToList();
+        if (keys.Count == 0)
+        {
+            return new BatchResult([]);
+        }
+
+        IsBusy = ++_runningOperations > 0;
+        try
+        {
+            var result = await _operations.UpgradeManyAsync(keys, new Progress<BatchProgress>(p => SetStatus($"Scheduled update {p.Position} of {p.Total} · {p.ItemName}", false)), cancellationToken);
+            SetStatus($"Scheduled updates: {result.Summary}", result.Failed > 0);
+            return result;
+        }
+        finally
+        {
+            IsBusy = --_runningOperations > 0;
+            await LoadAsync();
+        }
+    }
+
+    /// <summary>Pins, unpins or skips a version, then re-evaluates what counts as an update.</summary>
+    internal void ChangeRules(Func<UpdateRules, UpdateRules> change)
+    {
+        _settings.Update(s => s.WithRules(change(s.UpdateRules)));
+        if (_snapshot is not null)
+        {
+            Apply(_snapshot);
+        }
+    }
+
     internal Task UpgradeAsync(ApplicationItemViewModel item) =>
         RunAsync(item, i => i.IsWorking = true, i => i.IsWorking = false, $"Updating {item.Name}…", (progress, ct) => _operations.UpgradeAsync(item.Key, progress, ct));
 
-    internal Task UninstallAsync(ApplicationItemViewModel item) =>
-        RunAsync(item, i => i.IsWorking = true, i => i.IsWorking = false, $"Removing {item.Name}…", (progress, ct) => _operations.UninstallAsync(item.Key, UninstallMode.Silent, progress, ct));
+    internal async Task UninstallAsync(ApplicationItemViewModel item)
+    {
+        var application = item.Model;
+        await RunAsync(item, i => i.IsWorking = true, i => i.IsWorking = false, $"Removing {item.Name}…", (progress, ct) => _operations.UninstallAsync(item.Key, UninstallMode.Silent, progress, ct));
+        await OfferLeftoversAsync([application]);
+    }
 
     internal Task InstallAsync(CatalogItemViewModel item) =>
         RunAsync(
@@ -469,14 +569,19 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
 
     partial void OnSelectedSectionChanged(DockSection value)
     {
-        if (value == DockSection.Discover)
+        switch (value)
         {
-            IsSelecting = false;
-            _ = SearchCatalogAsync(SearchText);
-        }
-        else
-        {
-            RebuildList();
+            case DockSection.Discover:
+                IsSelecting = false;
+                _ = SearchCatalogAsync(SearchText);
+                break;
+            case DockSection.Startup:
+                IsSelecting = false;
+                _ = StartupPage.LoadAsync();
+                break;
+            default:
+                RebuildList();
+                break;
         }
     }
 
@@ -511,6 +616,79 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         _searchCancellation?.Dispose();
     }
 
+    /// <summary>Security advisories and last-use dates. Both are slow-ish and optional, so they arrive after the list.</summary>
+    public async Task RefreshInsightsAsync(InventorySnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        _lastUsed = await Task.Run(() => _insights.GetUsage(snapshot));
+        _advisories = _settings.Current.SecurityAlerts
+            ? await _insights.GetSecurityAdvisoriesAsync(snapshot, CancellationToken.None)
+            : new Dictionary<ApplicationKey, SecurityAdvisory>();
+
+        if (ReferenceEquals(snapshot, _snapshot))
+        {
+            ApplyInsights();
+            if (SelectedSection == DockSection.Updates || SelectedSort.Order == SortOrder.LeastRecentlyUsed)
+            {
+                RebuildList();
+            }
+        }
+    }
+
+    private void ApplyInsights()
+    {
+        var now = _time.GetUtcNow();
+        foreach (var item in _items.Values)
+        {
+            item.SecurityText = item.HasUpdate && _advisories.TryGetValue(item.Key, out var advisory) ? advisory.Summary : null;
+            item.UnusedText = _lastUsed.TryGetValue(item.Key, out var usage) && now - usage.LastUsed > UnusedAfter
+                ? $"Not opened for {Ago(now - usage.LastUsed)}"
+                : null;
+        }
+
+        SecurityUpdateCount = _items.Values.Count(i => i.HasSecurityAdvisory);
+    }
+
+    private static readonly TimeSpan UnusedAfter = TimeSpan.FromDays(90);
+
+    private static string Ago(TimeSpan span) => span.TotalDays switch
+    {
+        >= 730 => $"{(int)(span.TotalDays / 365)} years",
+        >= 365 => "a year",
+        >= 60 => $"{(int)(span.TotalDays / 30)} months",
+        _ => $"{(int)span.TotalDays} days",
+    };
+
+    /// <summary>After removals, offers to recycle what the uninstallers left behind — only for apps that are really gone.</summary>
+    private async Task OfferLeftoversAsync(IReadOnlyList<InstalledApplication> removed)
+    {
+        if (_snapshot is null)
+        {
+            return;
+        }
+
+        var gone = removed.Where(a => _snapshot.Find(a.Key) is null).ToList();
+        var folders = new List<LeftoverFolder>();
+        foreach (var application in gone)
+        {
+            try
+            {
+                folders.AddRange(await _leftovers.FindAsync(application, CancellationToken.None));
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                LogOperationFailed(ex, $"Looking for leftovers of {application.Name}");
+            }
+        }
+
+        folders = folders.DistinctBy(f => f.Path, StringComparer.OrdinalIgnoreCase).ToList();
+        if (folders.Count > 0)
+        {
+            var who = gone.Count == 1 ? gone[0].Name : $"{gone.Count} apps";
+            LeftoverOffer = new LeftoverOfferViewModel(who, folders, _leftovers, SetStatus, () => LeftoverOffer = null);
+        }
+    }
+
     private void CloseRestore()
     {
         Page = DockPage.Main;
@@ -541,9 +719,11 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
 
     private void Apply(InventorySnapshot snapshot)
     {
+        var refreshed = !ReferenceEquals(_snapshot, snapshot);
         _snapshot = snapshot;
+        var rules = _settings.Current.UpdateRules;
         InstalledCount = snapshot.Applications.Count;
-        UpdateCount = snapshot.Applications.Count(a => a.HasUpdate);
+        UpdateCount = snapshot.Applications.Count(rules.IsActionable);
 
         foreach (var application in snapshot.Applications)
         {
@@ -560,6 +740,18 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         foreach (var gone in _items.Keys.Where(k => snapshot.Find(k) is null).ToList())
         {
             _items.Remove(gone);
+        }
+
+        foreach (var item in _items.Values)
+        {
+            item.IsUpdateActionable = rules.IsActionable(item.Model);
+            item.IsPinned = rules.IsPinned(item.Model);
+        }
+
+        ApplyInsights();
+        if (refreshed)
+        {
+            _ = RefreshInsightsAsync(snapshot);
         }
 
         if (snapshot.IsPartial)
@@ -579,16 +771,23 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         }
 
         var visible = _snapshot.Query(SearchText)
-            .Where(a => SelectedSection != DockSection.Updates || a.HasUpdate)
-            .Select(a => _items[a.Key]);
+            .Select(a => _items[a.Key])
+            .Where(i => SelectedSection != DockSection.Updates || i.HasUpdate);
 
         visible = SelectedSort.Order switch
         {
             SortOrder.Size => visible.OrderByDescending(i => i.Model.EstimatedSizeBytes ?? -1),
             SortOrder.RecentlyInstalled => visible.OrderByDescending(i => i.Model.InstallDate ?? DateOnly.MinValue),
             SortOrder.MemoryUse => visible.OrderByDescending(i => i.Usage.MemoryBytes),
+            SortOrder.LeastRecentlyUsed => visible.OrderBy(i => _lastUsed.TryGetValue(i.Key, out var u) ? u.LastUsed : DateTimeOffset.MaxValue),
             _ => visible,
         };
+
+        if (SelectedSection == DockSection.Updates)
+        {
+            // Actively exploited first: those are the ones worth doing now.
+            visible = visible.OrderByDescending(i => i.HasSecurityAdvisory);
+        }
 
         Applications.Clear();
         foreach (var item in visible.ToList())

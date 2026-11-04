@@ -20,7 +20,7 @@ public sealed class DockWindowRenderTests : IClassFixture<HeadlessSession>
 
     public DockWindowRenderTests(HeadlessSession session) => _session = session;
 
-    public static TheoryData<string> Scenes => ["installed", "updates", "discover", "select", "settings", "restore"];
+    public static TheoryData<string> Scenes => ["installed", "updates", "discover", "select", "settings", "restore", "startup", "leftovers"];
 
     [Theory]
     [MemberData(nameof(Scenes))]
@@ -38,6 +38,7 @@ public sealed class DockWindowRenderTests : IClassFixture<HeadlessSession>
                 viewModel.StopMonitoring();
 
                 await viewModel.LoadAsync();
+                await viewModel.RefreshInsightsAsync(viewModel.Snapshot!);
                 await viewModel.SampleResourcesAsync();
                 await Task.Delay(150);
                 await viewModel.SampleResourcesAsync();
@@ -85,6 +86,16 @@ public sealed class DockWindowRenderTests : IClassFixture<HeadlessSession>
                 break;
             case "settings":
                 viewModel.Page = DockPage.Settings;
+                break;
+            case "startup":
+                viewModel.SelectedSection = DockSection.Startup;
+                await viewModel.StartupPage.LoadAsync();
+                break;
+            case "leftovers":
+                var discord = viewModel.Applications.Single(a => a.Name == "Discord");
+                await discord.ConfirmUninstallCommand.ExecuteAsync(null);
+                viewModel.Applications.Single(a => a.Name == "Git").SkipVersionCommand.Execute(null);
+                viewModel.Applications.Single(a => a.Name == "Microsoft PowerToys").PinCommand.Execute(null);
                 break;
             case "restore":
                 await viewModel.OpenRestoreAsync(new SoftwareManifest(

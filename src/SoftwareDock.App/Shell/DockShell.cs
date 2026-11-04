@@ -29,6 +29,8 @@ public sealed partial class DockShell : IDisposable
     private readonly IUserSettingsStore _settings;
     private readonly IAppUpdater _updater;
     private readonly AutoBackup _autoBackup;
+    private readonly INotifier _notifier;
+    private readonly TimeProvider _time;
     private readonly Dictionary<string, WindowIcon> _icons = [];
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -42,6 +44,8 @@ public sealed partial class DockShell : IDisposable
         IUserSettingsStore settings,
         IAppUpdater updater,
         AutoBackup autoBackup,
+        INotifier notifier,
+        TimeProvider time,
         IOptions<DockOptions> options,
         ILogger<DockShell> logger)
     {
@@ -52,6 +56,8 @@ public sealed partial class DockShell : IDisposable
         _settings = settings;
         _updater = updater;
         _autoBackup = autoBackup; // Held so it lives (and keeps listening for inventory changes) as long as the shell.
+        _notifier = notifier;
+        _time = time;
         _options = options.Value;
         _logger = logger;
     }
@@ -74,6 +80,9 @@ public sealed partial class DockShell : IDisposable
         _ = _viewModel.LoadAsync();
         _ = CheckSoftwareUpdatesPeriodicallyAsync(_lifetime.Token);
         _ = CheckAppUpdatesPeriodicallyAsync(_lifetime.Token);
+        _ = RunScheduledUpdatesAsync(_lifetime.Token);
+        _ = AnnounceAfterStartAsync(_lifetime.Token);
+        _notifier.Activated += (_, target) => Avalonia.Threading.Dispatcher.UIThread.Post(() => Open(target));
 
         if (showPanel)
         {
@@ -82,6 +91,22 @@ public sealed partial class DockShell : IDisposable
     }
 
     public void ShowDock() => _window.ShowDock();
+
+    private void Open(NotificationTarget target)
+    {
+        switch (target)
+        {
+            case NotificationTarget.Updates:
+                _viewModel.Page = ViewModels.DockPage.Main;
+                _viewModel.SelectedSection = ViewModels.DockSection.Updates;
+                break;
+            case NotificationTarget.Settings:
+                _viewModel.Page = ViewModels.DockPage.Settings;
+                break;
+        }
+
+        _window.ShowDock();
+    }
 
     public void Dispose()
     {
@@ -170,6 +195,7 @@ public sealed partial class DockShell : IDisposable
                 if (_settings.Current.CheckForSoftwareUpdates && !_window.IsVisible)
                 {
                     await _viewModel.LoadAsync(forceRefresh: true);
+                    await AnnounceUpdatesAsync();
                 }
             }
         }
@@ -199,6 +225,7 @@ public sealed partial class DockShell : IDisposable
                         {
                             await _updater.DownloadAsync(update, null, cancellationToken);
                             _viewModel.OfferAppUpdate(update);
+                            Notify(new DockNotification($"Software Dock {update.Version} is ready", "Restart the dock to finish updating it.", NotificationTarget.Dock, "Open"));
                         }
                     }
                     catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException)
@@ -212,6 +239,80 @@ public sealed partial class DockShell : IDisposable
         }
         catch (OperationCanceledException)
         {
+        }
+    }
+
+    /// <summary>
+    /// Checks every minute whether the scheduled "update everything" is due. Polling the clock, not
+    /// a long timer, so a run missed while the PC slept happens soon after it wakes.
+    /// </summary>
+    private async Task RunScheduledUpdatesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                var settings = _settings.Current;
+                var now = _time.GetLocalNow().DateTime;
+                if (!settings.Schedule.IsDue(settings.LastScheduledRun ?? now.AddMinutes(-1), now))
+                {
+                    continue;
+                }
+
+                // Recorded before running: a crash mid-run must not turn into a retry loop.
+                _settings.Update(s => s with { LastScheduledRun = now });
+                var result = await _viewModel.RunScheduledUpdatesAsync(cancellationToken);
+                if (result.Items.Count > 0)
+                {
+                    Notify(new DockNotification("Scheduled updates finished", result.Summary, NotificationTarget.Updates));
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task AnnounceAfterStartAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Let sign-in settle; nobody wants a toast before the desktop has finished loading.
+            await Task.Delay(TimeSpan.FromMinutes(2), cancellationToken);
+            if (_settings.Current.CheckForSoftwareUpdates)
+            {
+                await AnnounceUpdatesAsync();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>Tells the user about updates — each version once, security ones first.</summary>
+    private async Task AnnounceUpdatesAsync()
+    {
+        if (_viewModel.Snapshot is not { } snapshot)
+        {
+            return;
+        }
+
+        await _viewModel.RefreshInsightsAsync(snapshot);
+        var settings = _settings.Current;
+        var (notification, announced) = UpdateAnnouncer.Announce(snapshot.Applications, settings.UpdateRules, _viewModel.Advisories, settings.AnnouncedUpdates);
+        _settings.Update(s => s with { AnnouncedUpdates = announced });
+        if (notification is not null)
+        {
+            Notify(notification);
+        }
+    }
+
+    private void Notify(DockNotification notification)
+    {
+        if (_settings.Current.Notifications)
+        {
+            _notifier.Notify(notification);
         }
     }
 

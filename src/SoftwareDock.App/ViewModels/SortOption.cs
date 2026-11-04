@@ -10,6 +10,7 @@ public sealed record SortOption(SortOrder Order, string Label)
         new(SortOrder.Size, "Size on disk"),
         new(SortOrder.RecentlyInstalled, "Recently installed"),
         new(SortOrder.MemoryUse, "Memory in use"),
+        new(SortOrder.LeastRecentlyUsed, "Least used"),
     ];
 
     public override string ToString() => Label;

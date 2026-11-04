@@ -15,7 +15,7 @@ public sealed partial class ApplicationItemViewModel : ObservableObject
     private bool _iconRequested;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Name), nameof(Subtitle), nameof(UpdateText), nameof(HasUpdate), nameof(CanUpgrade), nameof(ShowUninstall), nameof(ShowUpgrade), nameof(SizeText))]
+    [NotifyPropertyChangedFor(nameof(Name), nameof(Subtitle), nameof(UpdateText), nameof(HasUpdate), nameof(CanUpgrade), nameof(ShowUninstall), nameof(ShowUpgrade), nameof(SizeText), nameof(SkipLabel), nameof(CanSkip))]
     private InstalledApplication _model;
 
     [ObservableProperty]
@@ -32,6 +32,22 @@ public sealed partial class ApplicationItemViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isSelected;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowUpgrade), nameof(UpdateText), nameof(HasUpdate))]
+    private bool _isUpdateActionable;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanPin), nameof(CanSkip))]
+    private bool _isPinned;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasSecurityAdvisory))]
+    private string? _securityText;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsUnused))]
+    private string? _unusedText;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsRunning), nameof(UsageText), nameof(CpuFraction), nameof(CpuBrush))]
@@ -57,11 +73,22 @@ public sealed partial class ApplicationItemViewModel : ObservableObject
 
     public string Subtitle => string.Join("  ·  ", new[] { Model.Publisher, Model.Version is null ? null : $"v{Model.Version}" }.OfType<string>());
 
-    public bool HasUpdate => Model.HasUpdate;
+    /// <summary>An update the user still wants to see: not pinned, not a skipped version.</summary>
+    public bool HasUpdate => Model.HasUpdate && IsUpdateActionable;
 
-    public bool CanUpgrade => Model.CanUpgrade;
+    public bool HasSecurityAdvisory => SecurityText is not null;
 
-    public string? UpdateText => Model.HasUpdate ? $"→ {Model.AvailableVersion}" : null;
+    public bool IsUnused => UnusedText is not null;
+
+    public bool CanPin => !IsPinned;
+
+    public bool CanSkip => Model.HasUpdate && IsUpdateActionable;
+
+    public string SkipLabel => $"Skip version {Model.AvailableVersion}";
+
+    public bool CanUpgrade => Model.CanUpgrade && IsUpdateActionable;
+
+    public string? UpdateText => HasUpdate ? $"→ {Model.AvailableVersion}" : null;
 
     public string? SizeText => Model.EstimatedSizeBytes is { } bytes ? Format.Bytes(bytes) : null;
 
@@ -78,7 +105,7 @@ public sealed partial class ApplicationItemViewModel : ObservableObject
 
     public bool CanSelect => Model.CanUninstall;
 
-    public bool ShowUpgrade => ShowActions && Model.CanUpgrade;
+    public bool ShowUpgrade => ShowActions && Model.CanUpgrade && IsUpdateActionable;
 
     public bool ShowUninstall => ShowActions && Model.CanUninstall;
 
@@ -108,6 +135,21 @@ public sealed partial class ApplicationItemViewModel : ObservableObject
 
     [RelayCommand]
     private void RequestUninstall() => IsConfirmingUninstall = true;
+
+    [RelayCommand]
+    private void Pin() => _owner.ChangeRules(r => r.Pin(Key));
+
+    [RelayCommand]
+    private void Unpin() => _owner.ChangeRules(r => r.Unpin(Key));
+
+    [RelayCommand]
+    private void SkipVersion()
+    {
+        if (Model.AvailableVersion is { } version)
+        {
+            _owner.ChangeRules(r => r.Skip(Key, version));
+        }
+    }
 
     [RelayCommand]
     private void CancelUninstall() => IsConfirmingUninstall = false;
