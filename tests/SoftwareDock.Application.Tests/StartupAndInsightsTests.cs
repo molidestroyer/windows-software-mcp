@@ -46,6 +46,17 @@ public sealed class StartupAndInsightsTests : IDisposable
     }
 
     [Fact]
+    public async Task Startup_UnownedShortcut_IsShownWithoutExtension_ButKeepsItsApprovalName()
+    {
+        var sut = new StartupManager(new FakeStartup(new StartupItem("ArranqueDock.lnk", "x", StartupLocation.UserStartupFolder, null, true)), _inventory);
+
+        var entry = Assert.Single(await sut.ListAsync(CancellationToken.None));
+
+        Assert.Equal("ArranqueDock", entry.DisplayName);
+        Assert.Equal("ArranqueDock.lnk", entry.Item.Name);
+    }
+
+    [Fact]
     public async Task Startup_SettingTheCurrentState_DoesNothing()
     {
         var source = new FakeStartup();

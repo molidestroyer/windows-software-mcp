@@ -9,7 +9,9 @@ namespace SoftwareDock.Application.Startup;
 /// <summary>A startup entry, with the installed application it belongs to when that can be told.</summary>
 public sealed record StartupEntry(StartupItem Item, InstalledApplication? Application)
 {
-    public string DisplayName => Application?.Name ?? Item.Name;
+    // Item.Name keeps ".lnk": it is the StartupApproved value name. QA, 0.3.0: "ArranqueDock.lnk" was shown.
+    public string DisplayName => Application?.Name
+        ?? (Item.Name.EndsWith(".lnk", StringComparison.OrdinalIgnoreCase) ? Item.Name[..^4] : Item.Name);
 }
 
 /// <summary>Use case: see and switch what starts with Windows.</summary>

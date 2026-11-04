@@ -27,6 +27,7 @@ public sealed class SoftwareHygieneTools(StartupManager startup, SoftwareInsight
         var advisories = await insights.GetSecurityAdvisoriesAsync(snapshot, cancellationToken);
         return advisories
             .Select(a => (App: snapshot.Find(a.Key)!, Advisory: a.Value))
+            .Where(x => x.App is not null)
             .OrderByDescending(x => x.Advisory.LatestAdded)
             .Select(x => new SecurityAdvisoryDto(
                 x.App.Key.Value,
