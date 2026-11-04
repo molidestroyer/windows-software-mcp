@@ -88,6 +88,12 @@ entry and starts in the tray. A portable zip is attached to every release too.
 
 The installer is not code-signed yet, so SmartScreen may ask you to confirm the first time.
 
+Or with WinGet, once the package has been accepted into the community repository:
+
+```bash
+winget install MiguelMolina.SoftwareDock
+```
+
 ## Build from source
 
 Requirements: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and WinGet
@@ -117,10 +123,17 @@ change in ⚙️ is stored in `%LOCALAPPDATA%\SoftwareDock\settings.json`.
 Bump `<Version>` in `Directory.Build.props` and push to `main`. When no release exists for that
 version, CI tests, publishes self-contained, packs with Velopack, tags `vX.Y.Z` and creates the
 release that installed docks update from. Pushing a `v*` tag by hand does the same.
+Then it attaches the MCP bundle, publishes to the MCP Registry and opens the WinGet PR — see
+[Distribution](docs/distribution.md).
 
 ## Connect an AI agent (MCP)
 
-From the tray menu choose **Copy MCP config**, or print it:
+**Claude Desktop:** download **`SoftwareDock-mcp-win-x64.mcpb`** from the
+[latest release](https://github.com/molidestroyer/windows-software-mcp/releases/latest) and open it:
+it installs the server, no dock needed. The server is also listed in the
+[MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.molidestroyer/software-dock`.
+
+**Any other client:** from the tray menu choose **Copy MCP config**, or print it:
 
 ```bash
 SoftwareDock.Mcp.exe --print-config

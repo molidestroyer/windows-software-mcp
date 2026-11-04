@@ -11,7 +11,8 @@ dotnet build SoftwareDock.slnx
 dotnet test SoftwareDock.slnx
 dotnet run --project src/SoftwareDock.App -- --demo        # in-memory PC, safe anywhere
 SOFTWAREDOCK_SCREENSHOTS=$PWD/docs/images dotnet test tests/SoftwareDock.App.Tests   # regenerate README screenshots (absolute path)
-# release: bump <Version> in Directory.Build.props and push to main; CI tags vX.Y.Z and publishes with Velopack
+# release: bump <Version> in Directory.Build.props and push to main; CI tags vX.Y.Z and publishes with Velopack,
+#          then distribute.yml: .mcpb bundle, MCP Registry, WinGet PR (docs/distribution.md)
 ```
 
 Everything builds and tests on Linux too (`EnableWindowsTargeting`); the real adapters only run
@@ -56,6 +57,9 @@ on Windows.
   downloads delta). Manual equivalent: `%LOCALAPPDATA%\SoftwareDock\Update.exe apply -- --background`.
 - **One path → app rule** (`ApplicationRoots`) for processes, startup entries, UserAssist history and
   leftovers. Never add name-based matching beside it.
+- **WinGet manifests are templates** (`packaging/winget/`), used only for the first submission;
+  later versions go through `wingetcreate update`. `ProductCode` is Velopack's `--packId`
+  (`SoftwareDock`): renaming the pack id breaks WinGet's match with the installed app.
 - **Startup changes go through `StartupApproved`**, never by deleting Run values or shortcuts.
 - **Security alerts only for apps with an update pending**; KEV names products, not versions. Keep
   the matching strict and the wording "exploited", never "vulnerable".

@@ -1,0 +1,153 @@
+name: Distribute
+
+# Runs after CI has created a release (workflow_call), or by hand for a release that already
+# exists (Actions › Distribute › Run workflow). Three channels:
+#   1. an MCP bundle (.mcpb) attached to the release: one-click install in Claude Desktop;
+#   2. the official MCP Registry, which points at that bundle (GitHub OIDC, no secret needed);
+#   3. WinGet: a pull request on microsoft/winget-pkgs (needs the WINGET_TOKEN secret).
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Released version to distribute, without the v (e.g. 0.3.0)'
+        type: string
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  VERSION: ${{ inputs.version }}
+  MCPB_FILE: SoftwareDock-mcp-win-x64.mcpb
+  MCPB_CLI: '@anthropic-ai/mcpb@2.1.2'
+  MCP_PUBLISHER_VERSION: v1.8.1
+
+jobs:
+  mcpb:
+    runs-on: windows-latest
+    steps:
+      # Packaging files from this branch; the server built from the released tag.
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          ref: v${{ inputs.version }}
+          path: release
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: release/global.json
+
+      # Self-contained, like the release: the bundle runs on a PC with nothing but Windows and WinGet.
+      # A published bundle is never rebuilt: the MCP Registry records its hash, and a rebuild
+      # would not be byte-identical. Re-running the workflow (e.g. for WinGet) leaves it alone.
+      - name: Bundle already attached?
+        id: existing
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $assets = gh release view "v$env:VERSION" --repo $env:GITHUB_REPOSITORY --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw "Release v$env:VERSION not found" }
+          $exists = [bool]($assets | Where-Object { $_ -eq $env:MCPB_FILE })
+          "exists=$($exists.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "$env:MCPB_FILE already attached: $exists"
+
+      - name: Pack the MCP bundle
+        if: steps.existing.outputs.exists != 'true'
+        shell: pwsh
+        run: |
+          $dir = 'artifacts/mcpb'
+          dotnet publish release/src/SoftwareDock.Mcp -c Release -r win-x64 --self-contained -p:Version=$env:VERSION -o "$dir/server"
+          if ($LASTEXITCODE -ne 0) { throw 'dotnet publish failed' }
+          (Get-Content packaging/mcpb/manifest.json -Raw).Replace('"version": "0.0.0"', "`"version`": `"$env:VERSION`"") |
+            Set-Content "$dir/manifest.json" -Encoding utf8 -NoNewline
+          Copy-Item docs/images/icon.png "$dir/icon.png"
+          Copy-Item LICENSE "$dir/LICENSE"
+          npx -y $env:MCPB_CLI validate "$dir/manifest.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Invalid MCP bundle manifest' }
+          npx -y $env:MCPB_CLI pack $dir "artifacts/$env:MCPB_FILE"
+          if ($LASTEXITCODE -ne 0) { throw 'mcpb pack failed' }
+
+      - name: Attach the bundle to the release
+        if: steps.existing.outputs.exists != 'true'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "v$env:VERSION" "artifacts/$env:MCPB_FILE" --repo $env:GITHUB_REPOSITORY
+
+  mcp-registry:
+    needs: mcpb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Describe the release in server.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release download "v$VERSION" --pattern "$MCPB_FILE" --repo "$GITHUB_REPOSITORY" --dir /tmp/mcpb
+          sha="$(sha256sum "/tmp/mcpb/$MCPB_FILE" | cut -d' ' -f1)"
+          url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/$MCPB_FILE"
+          jq --arg v "$VERSION" --arg url "$url" --arg sha "$sha" \
+            '.version = $v | .packages[0].identifier = $url | .packages[0].fileSha256 = $sha' \
+            packaging/mcp-registry/server.json > server.json
+          cat server.json
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+
+      - name: Download and verify mcp-publisher
+        run: |
+          set -euo pipefail
+          archive="mcp-publisher_linux_amd64.tar.gz"
+          base_url="https://github.com/modelcontextprotocol/registry/releases/download/${MCP_PUBLISHER_VERSION}"
+          curl --fail --location --silent --show-error --output "$archive" "$base_url/$archive"
+          curl --fail --location --silent --show-error --output "$archive.sigstore.json" "$base_url/$archive.sigstore.json"
+          cosign verify-blob \
+            --bundle "$archive.sigstore.json" \
+            --certificate-identity "https://github.com/modelcontextprotocol/registry/.github/workflows/release.yml@refs/tags/${MCP_PUBLISHER_VERSION}" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+            "$archive"
+          tar xzf "$archive" mcp-publisher
+
+      - name: Publish to the MCP Registry
+        run: |
+          ./mcp-publisher login github-oidc
+          # A version can be published once; a re-run of the workflow must not fail here.
+          if ! out="$(./mcp-publisher publish 2>&1)"; then
+            echo "$out"
+            if grep -qi 'already' <<<"$out"; then
+              echo "::notice::$VERSION is already in the MCP Registry."
+              exit 0
+            fi
+            exit 1
+          fi
+          echo "$out"
+
+  winget:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Skipped, not failed, until the secret exists: see docs/distribution.md.
+      - name: Submit to WinGet
+        shell: pwsh
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if (-not $env:WINGET_TOKEN) {
+            Write-Host '::warning::WINGET_TOKEN is not set: skipping the WinGet submission (docs/distribution.md).'
+            return
+          }
+          ./packaging/winget/Submit-WinGet.ps1 -Version $env:VERSION -Token $env:WINGET_TOKEN -Repository $env:GITHUB_REPOSITORY
