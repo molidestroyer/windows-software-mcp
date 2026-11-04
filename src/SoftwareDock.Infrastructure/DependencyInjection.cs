@@ -2,6 +2,7 @@ using System.Runtime.Versioning;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SoftwareDock.Application.Abstractions;
+using SoftwareDock.Infrastructure.Monitoring;
 using SoftwareDock.Infrastructure.Processes;
 using SoftwareDock.Infrastructure.Registry;
 using SoftwareDock.Infrastructure.WinGet;
@@ -19,6 +20,7 @@ public static class DependencyInjection
         services.TryAddSingleton<IPackageManager, WinGetPackageManager>();
         services.TryAddSingleton<IInstalledApplicationSource, RegistryInstalledApplicationSource>();
         services.TryAddSingleton<IUninstallerLauncher, ShellUninstallerLauncher>();
+        services.TryAddSingleton<ISystemMonitor, WindowsSystemMonitor>();
         return services;
     }
 }

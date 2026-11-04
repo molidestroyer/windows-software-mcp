@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <RootNamespace>SoftwareDock.Infrastructure</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Description>Adapters for Windows: the Uninstall registry keys, the WinGet CLI and the registered uninstallers.</Description>
   </PropertyGroup>
   <ItemGroup>
