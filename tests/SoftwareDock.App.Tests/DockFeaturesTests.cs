@@ -85,7 +85,8 @@ public sealed class DockFeaturesTests : IDisposable
         Assert.True(chrome.IsRunning);
         Assert.InRange(chrome.Usage.CpuPercent, 5, 20);    // 0.9 cores of 8
         Assert.False(_sut.Applications.Single(a => a.Name == "Git").IsRunning);
-        Assert.Equal("6 apps running · 8.9 GB", _sut.AppsMemoryText);
+        // Format uses the user's culture: "8.9 GB" in en-US, "8,9 GB" in es-ES.
+        Assert.Equal(string.Create(System.Globalization.CultureInfo.CurrentCulture, $"6 apps running · {8.9:0.0} GB"), _sut.AppsMemoryText);
     }
 
     [Fact]
