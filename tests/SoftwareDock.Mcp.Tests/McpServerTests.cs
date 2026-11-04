@@ -173,15 +173,15 @@ public class McpServerTests
     }
 
     [Fact]
-    public async Task UnusedSoftware_ListsAppsNotOpenedForMonths()
+    public async Task UnusedSoftware_NeverListsAnAppThatIsRunning()
     {
+        // Git was last opened 200 days ago, but its bash.exe is running right now (QA, 0.3.0).
         await using var server = await McpServerFixture.StartAsync();
 
         var result = await server.CallAsync("list_unused_software", new() { ["days"] = 90 });
 
-        using var json = JsonDocument.Parse(Text(result));
-        Assert.True(json.RootElement[0].GetProperty("daysUnused").GetInt32() >= 199);
-        Assert.Equal(300, json.RootElement[0].GetProperty("sizeMb").GetInt64());
+        Assert.NotEqual(true, result.IsError);
+        Assert.Equal("[]", Text(result).Replace(" ", string.Empty, StringComparison.Ordinal));
     }
 
     [Fact]

@@ -83,9 +83,12 @@ public sealed class HygieneFeaturesTests : IDisposable
     {
         await LoadWithInsightsAsync();
 
-        Assert.Equal("Not opened for 8 months", App("Steam").UnusedText);
         Assert.Equal("Not opened for a year", App("Zoom Workplace").UnusedText);
+        Assert.Equal("Not opened for 5 months", App("OBS Studio").UnusedText);
         Assert.Null(App("Google Chrome").UnusedText);
+
+        // Last opened 8 months ago, but it starts with Windows: in use (QA, 0.3.0).
+        Assert.Null(App("Steam").UnusedText);
 
         _sut.SelectedSort = SortOption.All.Single(o => o.Order == SortOrder.LeastRecentlyUsed);
         Assert.Equal(["Zoom Workplace", "Steam", "OBS Studio"], _sut.Applications.Take(3).Select(a => a.Name));

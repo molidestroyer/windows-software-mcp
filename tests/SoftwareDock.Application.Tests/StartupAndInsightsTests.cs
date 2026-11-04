@@ -62,7 +62,7 @@ public sealed class StartupAndInsightsTests : IDisposable
     {
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 11, 4, 0, 0, 0, TimeSpan.Zero));
         var feed = new FakeFeed([new("CVE-2026-1111", "Mozilla", "Firefox", "Use-after-free", new DateOnly(2026, 10, 20), true)]);
-        var sut = new SoftwareInsights(feed, new FakeUsage(), time, NullLogger<SoftwareInsights>.Instance);
+        var sut = new SoftwareInsights(feed, new FakeUsage(), new FakeStartup(), new FakeSystem(), time, NullLogger<SoftwareInsights>.Instance);
         var snapshot = await _inventory.GetSnapshotAsync(false, CancellationToken.None);
 
         var advisories = await sut.GetSecurityAdvisoriesAsync(snapshot, CancellationToken.None);
@@ -77,11 +77,40 @@ public sealed class StartupAndInsightsTests : IDisposable
     {
         var lastWeek = new DateTimeOffset(2026, 10, 28, 0, 0, 0, TimeSpan.Zero);
         var usage = new FakeUsage(new UsageRecord(@"C:\Users\m\AppData\Local\Discord\app-1.0\Discord.exe", lastWeek, 40));
-        var sut = new SoftwareInsights(new FakeFeed([]), usage, TimeProvider.System, NullLogger<SoftwareInsights>.Instance);
+        var sut = new SoftwareInsights(new FakeFeed([]), usage, new FakeStartup(), new FakeSystem(), TimeProvider.System, NullLogger<SoftwareInsights>.Instance);
 
         var result = sut.GetUsage(await _inventory.GetSnapshotAsync(false, CancellationToken.None));
 
         Assert.Equal(lastWeek, Assert.Single(result).Value.LastUsed);
+    }
+
+    [Fact]
+    public async Task Unused_ExcludesAppsEnabledAtStartupOrRunning()
+    {
+        var longAgo = DateTimeOffset.UtcNow.AddDays(-200);
+        var usage = new FakeUsage(
+            new UsageRecord(@"C:\Users\m\AppData\Local\Discord\Discord.exe", longAgo, 3),
+            new UsageRecord(@"C:\Program Files\Mozilla Firefox\firefox.exe", longAgo, 3));
+        var snapshot = await _inventory.GetSnapshotAsync(false, CancellationToken.None);
+
+        var idle = new SoftwareInsights(new FakeFeed([]), usage, new FakeStartup(), new FakeSystem(), TimeProvider.System, NullLogger<SoftwareInsights>.Instance);
+        Assert.Equal(2, (await idle.GetUnusedAsync(snapshot, null, CancellationToken.None)).Count);
+
+        var startsWithWindows = new FakeStartup(new StartupItem("Discord", "x", StartupLocation.UserRun, @"C:\Users\m\AppData\Local\Discord\Update.exe", true));
+        var running = new FakeSystem(new Domain.Monitoring.ProcessSample(7, @"C:\Program Files\Mozilla Firefox\firefox.exe", TimeSpan.Zero, 1));
+        var busy = new SoftwareInsights(new FakeFeed([]), usage, startsWithWindows, running, TimeProvider.System, NullLogger<SoftwareInsights>.Instance);
+
+        Assert.Empty(await busy.GetUnusedAsync(snapshot, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Unused_ADisabledStartupEntryDoesNotCountAsUse()
+    {
+        var usage = new FakeUsage(new UsageRecord(@"C:\Users\m\AppData\Local\Discord\Discord.exe", DateTimeOffset.UtcNow.AddDays(-200), 3));
+        var disabled = new FakeStartup(new StartupItem("Discord", "x", StartupLocation.UserRun, @"C:\Users\m\AppData\Local\Discord\Update.exe", false));
+        var sut = new SoftwareInsights(new FakeFeed([]), usage, disabled, new FakeSystem(), TimeProvider.System, NullLogger<SoftwareInsights>.Instance);
+
+        Assert.Single(await sut.GetUnusedAsync(await _inventory.GetSnapshotAsync(false, CancellationToken.None), null, CancellationToken.None));
     }
 
     [Fact]
@@ -117,6 +146,15 @@ public sealed class StartupAndInsightsTests : IDisposable
 
         public Task<IReadOnlyList<KnownExploitedVulnerability>> GetAsync(CancellationToken cancellationToken) =>
             Throw ? throw new HttpRequestException("offline") : Task.FromResult(catalog);
+    }
+
+    private sealed class FakeSystem(params Domain.Monitoring.ProcessSample[] processes) : ISystemMonitor
+    {
+        public int ProcessorCount => 4;
+
+        public IReadOnlyList<Domain.Monitoring.ProcessSample> GetProcesses() => processes;
+
+        public Domain.Monitoring.MemoryStatus GetMemoryStatus() => new(1, 1);
     }
 
     private sealed class FakeUsage(params UsageRecord[] records) : IUsageHistorySource

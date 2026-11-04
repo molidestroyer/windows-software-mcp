@@ -15,6 +15,8 @@ namespace SoftwareDock.Application.Insights;
 public sealed partial class SoftwareInsights(
     IVulnerabilityFeed feed,
     IUsageHistorySource usage,
+    IStartupItemSource startup,
+    ISystemMonitor system,
     TimeProvider time,
     ILogger<SoftwareInsights> logger)
 {
@@ -47,6 +49,48 @@ public sealed partial class SoftwareInsights(
             LogUsageFailed(ex);
             return new Dictionary<ApplicationKey, ApplicationUsage>();
         }
+    }
+
+    /// <summary>
+    /// Applications not opened for <paramref name="threshold"/> that are not running, not enabled at
+    /// startup and not part of Windows (<see cref="UnusedApplications"/>).
+    /// </summary>
+    public async Task<IReadOnlyDictionary<ApplicationKey, ApplicationUsage>> GetUnusedAsync(
+        InventorySnapshot snapshot,
+        TimeSpan? threshold,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        var lastUsed = GetUsage(snapshot);
+        var ownerOf = ApplicationRoots.Lookup(snapshot.Applications);
+        var inUse = new HashSet<ApplicationKey>();
+
+        try
+        {
+            foreach (var item in await startup.ListAsync(cancellationToken))
+            {
+                if (item.IsEnabled && ownerOf(item.ExecutablePath) is { } key)
+                {
+                    inUse.Add(key);
+                }
+            }
+
+            foreach (var process in await Task.Run(system.GetProcesses, cancellationToken))
+            {
+                if (ownerOf(process.ImagePath) is { } key)
+                {
+                    inUse.Add(key);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException or InvalidOperationException)
+        {
+            // Without knowing what is in use, saying "unused" could be wrong: say nothing.
+            LogUsageFailed(ex);
+            return new Dictionary<ApplicationKey, ApplicationUsage>();
+        }
+
+        return UnusedApplications.Find(snapshot.Applications, lastUsed, time.GetUtcNow(), inUse, threshold);
     }
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The vulnerability catalog is unavailable; no security advisories this time")]

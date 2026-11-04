@@ -274,13 +274,16 @@ public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, 
         ]);
     }
 
-    public Task<IReadOnlyList<LeftoverFolder>> FindAsync(InstalledApplication application, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<LeftoverFolder>> FindAsync(
+        InstalledApplication application,
+        IReadOnlyCollection<InstalledApplication> stillInstalled,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(application);
         var folders = new KnownFolders(@"C:\Program Files", @"C:\Program Files (x86)", @"C:\ProgramData", @"C:\Users\demo\AppData\Roaming", @"C:\Users\demo\AppData\Local");
 
         // Pretend the uninstaller forgot the user's data folders, as most do.
-        return Task.FromResult<IReadOnlyList<LeftoverFolder>>(LeftoverCandidates.For(application, folders)
+        return Task.FromResult<IReadOnlyList<LeftoverFolder>>(LeftoverCandidates.For(application, folders, stillInstalled)
             .Where(p => p.Contains("AppData", StringComparison.Ordinal) && !p.Contains(@"\Programs\", StringComparison.Ordinal))
             .Take(2)
             .Select((p, i) => new LeftoverFolder(p, (i + 1) * 87L << 20))

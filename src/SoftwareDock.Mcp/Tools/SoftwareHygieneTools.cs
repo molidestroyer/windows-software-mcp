@@ -39,20 +39,19 @@ public sealed class SoftwareHygieneTools(StartupManager startup, SoftwareInsight
     }
 
     [McpServerTool(Name = "list_unused_software", Title = "Software not used in a long time", ReadOnly = true, Idempotent = true, OpenWorld = false)]
-    [Description("Installed applications the user has not opened for at least `days` days, largest first — candidates to uninstall. Based on Windows' own launch history (Start menu, taskbar, Explorer); apps it never recorded are not listed.")]
+    [Description("Installed applications the user has not opened for at least `days` days, largest first — candidates to uninstall. Based on Windows' own launch history (Start menu, taskbar, Explorer); apps running now, enabled at startup or part of Windows are never listed.")]
     public async Task<IReadOnlyList<UnusedSoftwareDto>> ListUnusedSoftwareAsync(
         [Description("Minimum days since last use (default 90).")] int days = 90,
         CancellationToken cancellationToken = default)
     {
         var snapshot = await inventory.GetSnapshotAsync(forceRefresh: false, cancellationToken);
-        var usage = insights.GetUsage(snapshot);
-        var cutoff = time.GetUtcNow().AddDays(-Math.Max(1, days));
-        return usage
-            .Where(u => u.Value.LastUsed < cutoff)
+        var unused = await insights.GetUnusedAsync(snapshot, TimeSpan.FromDays(Math.Max(1, days)), cancellationToken);
+        var now = time.GetUtcNow();
+        return unused
             .Select(u => (App: snapshot.Find(u.Key)!, Usage: u.Value))
             .Where(x => x.App is not null)
             .OrderByDescending(x => x.App.EstimatedSizeBytes ?? 0)
-            .Select(x => new UnusedSoftwareDto(x.App.Key.Value, x.App.Name, x.Usage.LastUsed, (int)(time.GetUtcNow() - x.Usage.LastUsed).TotalDays, x.App.EstimatedSizeBytes / (1024 * 1024)))
+            .Select(x => new UnusedSoftwareDto(x.App.Key.Value, x.App.Name, x.Usage.LastUsed, (int)(now - x.Usage.LastUsed).TotalDays, x.App.EstimatedSizeBytes / (1024 * 1024)))
             .ToList();
     }
 }

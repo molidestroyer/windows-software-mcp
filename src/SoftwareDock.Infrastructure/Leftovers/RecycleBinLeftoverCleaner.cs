@@ -7,7 +7,10 @@ using SoftwareDock.Domain.Operations;
 
 namespace SoftwareDock.Infrastructure.Leftovers;
 
-/// <summary>Finds leftover folders and moves them to the Recycle Bin through the shell.</summary>
+/// <summary>
+/// Finds leftover folders and moves them to the Recycle Bin through the shell. Anything the bin
+/// cannot take triggers the shell's own "delete permanently?" prompt rather than a silent delete.
+/// </summary>
 [SupportedOSPlatform("windows")]
 public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
 {
@@ -16,9 +19,16 @@ public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
     private const ushort FofNoConfirmation = 0x10;
     private const ushort FofAllowUndo = 0x40;
     private const ushort FofNoErrorUi = 0x400;
+
+    // Partially overrides FOF_NOCONFIRMATION: asks before destroying anything that cannot be
+    // recycled (too large for the bin, or a drive without one) instead of deleting it silently.
+    private const ushort FofWantNukeWarning = 0x4000;
     private const int MaxFilesMeasured = 200_000;
 
-    public Task<IReadOnlyList<LeftoverFolder>> FindAsync(InstalledApplication application, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<LeftoverFolder>> FindAsync(
+        InstalledApplication application,
+        IReadOnlyCollection<InstalledApplication> stillInstalled,
+        CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(application);
         var folders = new KnownFolders(
@@ -29,7 +39,7 @@ public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
 
         return Task.Run<IReadOnlyList<LeftoverFolder>>(
-            () => LeftoverCandidates.For(application, folders)
+            () => LeftoverCandidates.For(application, folders, stillInstalled)
                 .Where(Directory.Exists)
                 .Select(path => new LeftoverFolder(path, Measure(path)))
                 .ToList(),
@@ -55,7 +65,7 @@ public sealed partial class RecycleBinLeftoverCleaner : ILeftoverCleaner
                 {
                     Function = FoDelete,
                     From = from,
-                    Flags = FofAllowUndo | FofNoConfirmation | FofSilent | FofNoErrorUi,
+                    Flags = FofAllowUndo | FofNoConfirmation | FofWantNukeWarning | FofSilent | FofNoErrorUi,
                 };
                 var code = SHFileOperation(ref operation);
                 return code == 0 && !operation.AnyOperationsAborted

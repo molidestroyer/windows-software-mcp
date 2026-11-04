@@ -50,6 +50,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     private ResourceSnapshot _usage = ResourceSnapshot.Empty;
     private IReadOnlyDictionary<ApplicationKey, SecurityAdvisory> _advisories = new Dictionary<ApplicationKey, SecurityAdvisory>();
     private IReadOnlyDictionary<ApplicationKey, ApplicationUsage> _lastUsed = new Dictionary<ApplicationKey, ApplicationUsage>();
+    private IReadOnlyDictionary<ApplicationKey, ApplicationUsage> _unused = new Dictionary<ApplicationKey, ApplicationUsage>();
     private CancellationTokenSource? _searchCancellation;
     private CancellationTokenSource? _monitorCancellation;
     private AppUpdate? _pendingAppUpdate;
@@ -621,6 +622,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         _lastUsed = await Task.Run(() => _insights.GetUsage(snapshot));
+        _unused = await _insights.GetUnusedAsync(snapshot, UnusedApplications.DefaultThreshold, CancellationToken.None);
         _advisories = _settings.Current.SecurityAlerts
             ? await _insights.GetSecurityAdvisoriesAsync(snapshot, CancellationToken.None)
             : new Dictionary<ApplicationKey, SecurityAdvisory>();
@@ -641,15 +643,11 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         foreach (var item in _items.Values)
         {
             item.SecurityText = item.HasUpdate && _advisories.TryGetValue(item.Key, out var advisory) ? advisory.Summary : null;
-            item.UnusedText = _lastUsed.TryGetValue(item.Key, out var usage) && now - usage.LastUsed > UnusedAfter
-                ? $"Not opened for {Ago(now - usage.LastUsed)}"
-                : null;
+            item.UnusedText = _unused.TryGetValue(item.Key, out var usage) ? $"Not opened for {Ago(now - usage.LastUsed)}" : null;
         }
 
         SecurityUpdateCount = _items.Values.Count(i => i.HasSecurityAdvisory);
     }
-
-    private static readonly TimeSpan UnusedAfter = TimeSpan.FromDays(90);
 
     private static string Ago(TimeSpan span) => span.TotalDays switch
     {
@@ -673,7 +671,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         {
             try
             {
-                folders.AddRange(await _leftovers.FindAsync(application, CancellationToken.None));
+                folders.AddRange(await _leftovers.FindAsync(application, _snapshot.Applications, CancellationToken.None));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

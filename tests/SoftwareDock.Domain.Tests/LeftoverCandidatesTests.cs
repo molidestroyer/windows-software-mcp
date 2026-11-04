@@ -20,7 +20,7 @@ public class LeftoverCandidatesTests
     [Fact]
     public void IncludesTheInstallFolder_AndExactNameFoldersInKnownLocations()
     {
-        var candidates = LeftoverCandidates.For(App("Discord", "Discord Inc.", @"C:\Users\m\AppData\Local\Discord\"), Folders);
+        var candidates = LeftoverCandidates.For(App("Discord", "Discord Inc.", @"C:\Users\m\AppData\Local\Discord\"), Folders, []);
 
         Assert.Contains(@"C:\Users\m\AppData\Local\Discord", candidates);
         Assert.Contains(@"C:\Users\m\AppData\Roaming\Discord", candidates);
@@ -31,13 +31,13 @@ public class LeftoverCandidatesTests
     [Fact]
     public void PublisherFolders_AreTried()
     {
-        Assert.Contains(@"C:\Users\m\AppData\Local\Google\Chrome", LeftoverCandidates.For(App("Chrome", "Google LLC"), Folders));
+        Assert.Contains(@"C:\Users\m\AppData\Local\Google\Chrome", LeftoverCandidates.For(App("Chrome", "Google LLC"), Folders, []));
     }
 
     [Fact]
     public void GenericInstallLocations_AreNeverCandidates()
     {
-        var candidates = LeftoverCandidates.For(App("Tool", location: @"C:\Program Files\"), Folders);
+        var candidates = LeftoverCandidates.For(App("Tool", location: @"C:\Program Files\"), Folders, []);
 
         Assert.DoesNotContain(@"C:\Program Files", candidates);
     }
@@ -45,7 +45,48 @@ public class LeftoverCandidatesTests
     [Fact]
     public void TooShortNames_YieldOnlyTheInstallFolder()
     {
-        Assert.Empty(LeftoverCandidates.For(App("Go"), Folders));
+        Assert.Empty(LeftoverCandidates.For(App("Go"), Folders, []));
+    }
+
+    // QA, 0.3.0 on a real PC: Python 3.14 lives in %LOCALAPPDATA%\Python\pythoncore-3.14-64 and
+    // the shared pip user site in %APPDATA%\Python. Removing Python 3.12 must offer neither.
+    [Fact]
+    public void AnotherInstallInsideACandidate_VetoesIt()
+    {
+        var removed = App("Python 3.12.7 (64-bit)", "Python Software Foundation");
+        var stillInstalled = App("Python 3.14.3", "Python Software Foundation", @"C:\Users\m\AppData\Local\Python\pythoncore-3.14-64");
+
+        var candidates = LeftoverCandidates.For(removed, Folders, [removed, stillInstalled]);
+
+        Assert.DoesNotContain(candidates, c => @"C:\Users\m\AppData\Local\Python\pythoncore-3.14-64".StartsWith(c, StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(@"C:\Users\m\AppData\Roaming\Python", candidates);
+    }
+
+    [Fact]
+    public void SameNameStillInstalled_DropsEveryNameBasedCandidate()
+    {
+        var x86 = App("Microsoft Visual C++ 2015-2022 Redistributable (x86) - 14.44.35211", "Microsoft Corporation");
+        var x64 = App("Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.44.35211", "Microsoft Corporation");
+
+        Assert.Empty(LeftoverCandidates.For(x86, Folders, [x64]));
+    }
+
+    [Fact]
+    public void ACandidateInsideAnInstalledAppsFolder_IsVetoed()
+    {
+        var plugin = App("Thing", location: @"C:\Program Files\Suite\Thing");
+        var suite = App("Suite", location: @"C:\Program Files\Suite");
+
+        Assert.DoesNotContain(@"C:\Program Files\Suite\Thing", LeftoverCandidates.For(plugin, Folders, [suite]));
+    }
+
+    [Fact]
+    public void UnrelatedInstalledApps_DoNotVetoAnything()
+    {
+        var discord = App("Discord", "Discord Inc.", @"C:\Users\m\AppData\Local\Discord");
+        var git = App("Git", location: @"C:\Program Files\Git");
+
+        Assert.Contains(@"C:\Users\m\AppData\Roaming\Discord", LeftoverCandidates.For(discord, Folders, [git, discord]));
     }
 
     [Theory]
