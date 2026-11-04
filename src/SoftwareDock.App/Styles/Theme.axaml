@@ -1,0 +1,254 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <Styles.Resources>
+    <ResourceDictionary>
+      <!-- Palette: the indigo → violet of the app icon on a near-black, slightly blue surface. -->
+      <Color x:Key="AccentStart">#6366F1</Color>
+      <Color x:Key="AccentEnd">#A855F7</Color>
+      <SolidColorBrush x:Key="SurfaceBrush" Color="#F2121218" />
+      <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#14FFFFFF" />
+      <SolidColorBrush x:Key="SurfaceHoverBrush" Color="#22FFFFFF" />
+      <SolidColorBrush x:Key="StrokeBrush" Color="#1FFFFFFF" />
+      <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F4F4F5" />
+      <SolidColorBrush x:Key="TextSecondaryBrush" Color="#A1A1AA" />
+      <SolidColorBrush x:Key="TextMutedBrush" Color="#71717A" />
+      <SolidColorBrush x:Key="UpdateBrush" Color="#F59E0B" />
+      <SolidColorBrush x:Key="UpdateSoftBrush" Color="#26F59E0B" />
+      <SolidColorBrush x:Key="DangerBrush" Color="#EF4444" />
+      <SolidColorBrush x:Key="DangerSoftBrush" Color="#26EF4444" />
+      <SolidColorBrush x:Key="SuccessBrush" Color="#22C55E" />
+      <LinearGradientBrush x:Key="AccentBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="{StaticResource AccentStart}" />
+        <GradientStop Offset="1" Color="{StaticResource AccentEnd}" />
+      </LinearGradientBrush>
+      <LinearGradientBrush x:Key="HeaderGlowBrush" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Offset="0" Color="#336366F1" />
+        <GradientStop Offset="0.6" Color="#11A855F7" />
+        <GradientStop Offset="1" Color="#00000000" />
+      </LinearGradientBrush>
+
+      <!-- Icons: 24×24 geometry, drawn with PathIcon so they follow Foreground. -->
+      <StreamGeometry x:Key="IconSearch">M10,2 A8,8 0 1 0 14.9,16.3 L20.3,21.7 21.7,20.3 16.3,14.9 A8,8 0 0 0 10,2 Z M10,4 A6,6 0 1 1 10,16 A6,6 0 1 1 10,4 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconRefresh">M12,4 C8.4,4 5.4,6.4 4.4,9.7 L6.3,10.3 C7.1,7.8 9.4,6 12,6 C14,6 15.7,7 16.8,8.5 L14,8.5 14,10.5 20,10.5 20,4.5 18,4.5 18,7 C16.5,5.2 14.4,4 12,4 Z M19.6,13.7 L17.7,13.1 C16.9,15.9 14.6,18 12,18 C10,18 8.3,17 7.2,15.5 L10,15.5 10,13.5 4,13.5 4,19.5 6,19.5 6,17 C7.5,18.8 9.6,20 12,20 C15.6,20 18.6,17.4 19.6,13.7 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconClose">M5.4,4 L12,10.6 18.6,4 20,5.4 13.4,12 20,18.6 18.6,20 12,13.4 5.4,20 4,18.6 10.6,12 4,5.4 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconPin">M14.6,2.6 L21.4,9.4 20,10.8 18.9,9.7 15.1,13.5 15.6,17.6 14.2,19 10.3,15.1 4.4,21 3,21 3,19.6 8.9,13.7 5,9.8 6.4,8.4 10.5,8.9 14.3,5.1 13.2,4 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconWindow">F1 M3,4 L21,4 21,20 3,20 Z M5,8 L5,18 19,18 19,8 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconTrash">F1 M9,2 L15,2 15,4 20,4 20,6 4,6 4,4 9,4 Z M5.5,7 L18.5,7 17.5,22 6.5,22 Z M9,9.5 L9,19.5 10.6,19.5 10.6,9.5 Z M13.4,9.5 L13.4,19.5 15,19.5 15,9.5 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconArrowUp">M12,3 L19.5,10.5 18.1,11.9 13,6.8 13,21 11,21 11,6.8 5.9,11.9 4.5,10.5 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconDownload">M11,3 L13,3 13,13.2 16.6,9.6 18,11 12,17 6,11 7.4,9.6 11,13.2 Z M4,19 L20,19 20,21 4,21 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconCheck">M9,16.2 L4.8,12 3.4,13.4 9,19 21,7 19.6,5.6 Z</StreamGeometry>
+      <StreamGeometry x:Key="IconSparkle">M12,2 L13.8,8.2 20,10 13.8,11.8 12,18 10.2,11.8 4,10 10.2,8.2 Z M19,15 L19.9,17.1 22,18 19.9,18.9 19,21 18.1,18.9 16,18 18.1,17.1 Z</StreamGeometry>
+    </ResourceDictionary>
+  </Styles.Resources>
+
+  <!-- Panel chrome -->
+  <Style Selector="Border.panel">
+    <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="TextBlock.caption">
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+  </Style>
+
+  <!-- Square ghost buttons in the header -->
+  <Style Selector="Button.icon">
+    <Setter Property="Width" Value="32" />
+    <Setter Property="Height" Value="32" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Button.icon:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="Button.icon:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="Button.icon PathIcon">
+    <Setter Property="Width" Value="15" />
+    <Setter Property="Height" Value="15" />
+  </Style>
+
+  <!-- Search -->
+  <Style Selector="TextBox.search">
+    <Setter Property="Height" Value="40" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="38,0,12,0" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="BorderBrush" Value="{StaticResource StrokeBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="TextBox.search:focus /template/ Border#PART_BorderElement">
+    <Setter Property="BorderBrush" Value="{StaticResource AccentStart}" />
+    <Setter Property="Background" Value="#1AFFFFFF" />
+  </Style>
+  <Style Selector="TextBox.search:pointerover /template/ Border#PART_BorderElement">
+    <Setter Property="Background" Value="#1AFFFFFF" />
+  </Style>
+
+  <!-- Segmented tabs -->
+  <Style Selector="RadioButton.tab">
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Name="chip" CornerRadius="8" Padding="12,7" Background="Transparent">
+          <ContentPresenter Content="{TemplateBinding Content}" HorizontalAlignment="Center" />
+        </Border>
+      </ControlTemplate>
+    </Setter>
+    <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Medium" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="RadioButton.tab:pointerover /template/ Border#chip">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="RadioButton.tab:checked /template/ Border#chip">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+  </Style>
+  <Style Selector="RadioButton.tab:checked">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Count pill inside a tab -->
+  <Style Selector="Border.count">
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="6,0" />
+    <Setter Property="Margin" Value="6,0,0,0" />
+    <Setter Property="Background" Value="#26FFFFFF" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="Border.count TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="Border.count.warn">
+    <Setter Property="Background" Value="{StaticResource UpdateBrush}" />
+  </Style>
+  <Style Selector="Border.count.warn TextBlock">
+    <Setter Property="Foreground" Value="#1C1917" />
+  </Style>
+
+  <!-- App rows -->
+  <Style Selector="Border.row">
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="10,9" />
+    <Setter Property="Margin" Value="0,0,0,4" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+  <Style Selector="Border.row:pointerover">
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+  </Style>
+  <Style Selector="Border.avatar">
+    <Setter Property="Width" Value="38" />
+    <Setter Property="Height" Value="38" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="ClipToBounds" Value="True" />
+  </Style>
+  <Style Selector="Border.avatar TextBlock">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="FontWeight" Value="Bold" />
+    <Setter Property="Foreground" Value="White" />
+    <Setter Property="HorizontalAlignment" Value="Center" />
+    <Setter Property="VerticalAlignment" Value="Center" />
+  </Style>
+  <Style Selector="TextBlock.name">
+    <Setter Property="FontSize" Value="13.5" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="TextBlock.meta">
+    <Setter Property="FontSize" Value="11.5" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+    <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+  </Style>
+  <Style Selector="Border.badge">
+    <Setter Property="CornerRadius" Value="6" />
+    <Setter Property="Padding" Value="6,1" />
+    <Setter Property="Background" Value="{StaticResource UpdateSoftBrush}" />
+    <Setter Property="HorizontalAlignment" Value="Left" />
+    <Setter Property="Margin" Value="0,4,0,0" />
+  </Style>
+  <Style Selector="Border.badge TextBlock">
+    <Setter Property="FontSize" Value="11" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="Foreground" Value="{StaticResource UpdateBrush}" />
+  </Style>
+
+  <!-- Row actions -->
+  <Style Selector="Button.action">
+    <Setter Property="Height" Value="30" />
+    <Setter Property="MinWidth" Value="30" />
+    <Setter Property="Padding" Value="10,0" />
+    <Setter Property="CornerRadius" Value="8" />
+    <Setter Property="FontSize" Value="12" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+    <Setter Property="BorderThickness" Value="0" />
+  </Style>
+  <Style Selector="Button.action PathIcon">
+    <Setter Property="Width" Value="13" />
+    <Setter Property="Height" Value="13" />
+  </Style>
+  <Style Selector="Button.action:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}" />
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Opacity" Value="0.9" />
+  </Style>
+  <Style Selector="Button.update">
+    <Setter Property="Background" Value="{StaticResource UpdateSoftBrush}" />
+    <Setter Property="Foreground" Value="{StaticResource UpdateBrush}" />
+  </Style>
+  <Style Selector="Button.update:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#40F59E0B" />
+  </Style>
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover">
+    <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{StaticResource DangerSoftBrush}" />
+  </Style>
+  <Style Selector="Button.danger">
+    <Setter Property="Background" Value="{StaticResource DangerBrush}" />
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="#DC2626" />
+  </Style>
+
+  <Style Selector="ProgressBar.activity">
+    <Setter Property="Height" Value="2" />
+    <Setter Property="MinHeight" Value="2" />
+    <Setter Property="Foreground" Value="{StaticResource AccentBrush}" />
+    <Setter Property="Background" Value="Transparent" />
+  </Style>
+</Styles>
