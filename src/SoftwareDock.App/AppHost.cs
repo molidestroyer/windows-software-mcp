@@ -51,6 +51,7 @@ public static class AppHost
             services.TryAddSingleton<IUserSettingsStore>(new InMemoryUserSettingsStore(new UserSettings { AutomaticBackup = false }));
             services.AddSingleton<IAppUpdater, NoAppUpdater>();
             services.TryAddSingleton<INotifier, RecordingNotifier>();
+            services.TryAddSingleton<IBatchElevator, InProcessBatchElevator>();
         }
         else
         {
@@ -59,6 +60,7 @@ public static class AppHost
             services.AddSingleton<IStartupRegistration, RunKeyStartupRegistration>();
             services.TryAddSingleton<IUserSettingsStore, JsonFileUserSettingsStore>();
             services.AddSingleton<IAppUpdater, VelopackAppUpdater>();
+            services.TryAddSingleton<IBatchElevator, UacBatchElevator>();
             if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 17763))
             {
                 services.TryAddSingleton<INotifier, ToastNotifier>();
@@ -70,6 +72,7 @@ public static class AppHost
         }
 
         services.AddSingleton<AutoBackup>();
+        services.AddSingleton<BatchRunner>();
         services.TryAddSingleton<IShellServices>(sp => new AvaloniaShellServices(new Lazy<DockWindow>(sp.GetRequiredService<DockWindow>)));
         services.AddSingleton<SettingsViewModel>();
 

@@ -71,6 +71,9 @@ can answer *"what do I have installed?"*, *"what is eating my memory?"*, *"updat
 - **Unused apps** — *Not opened for 8 months* badges from Windows' own launch history, and a
   *Least used* sort to find what to remove.
 - **Pin or skip** — right-click an app: *Skip version 2.47.1* or *Pin — never update*.
+- **Administrator rights once per batch** (opt-in) — *Update all*, bulk uninstall and restore ask
+  Windows once and run every installer elevated, instead of one UAC prompt per app. The elevation
+  ends with the batch; scheduled updates and the MCP server never use it.
 - **Updates on a schedule** — every night or every Sunday night; a run missed while the PC was off
   happens when it wakes.
 - **Windows notifications** — new updates (once per version), security alerts first, scheduled-run

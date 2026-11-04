@@ -96,6 +96,12 @@ public sealed partial class SettingsViewModel : ObservableObject
         set => _store.Update(s => s with { Notifications = value });
     }
 
+    public bool ElevateBatches
+    {
+        get => _store.Current.ElevateBatches;
+        set => _store.Update(s => s with { ElevateBatches = value });
+    }
+
     public bool SecurityAlerts
     {
         get => _store.Current.SecurityAlerts;

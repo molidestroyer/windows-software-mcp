@@ -371,6 +371,14 @@
                   <ComboBox Grid.Column="2" Classes="sort" VerticalAlignment="Top" ItemsSource="{Binding ScheduleOptions}" SelectedItem="{Binding SelectedSchedule}" />
                 </Grid>
                 <Grid ColumnDefinitions="Auto,*,Auto">
+                  <PathIcon Data="{StaticResource IconShield}" Width="16" Height="16" Foreground="#60A5FA" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="Administrator rights once per batch" />
+                    <TextBlock Classes="hint" Text="Update all, bulk uninstall and restore ask Windows once, then run every installer elevated. Scheduled updates and the MCP server never do." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding ElevateBatches}" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto">
                   <PathIcon Data="{StaticResource IconShield}" Width="16" Height="16" Foreground="{StaticResource DangerBrush}" VerticalAlignment="Top" Margin="0,2,10,0" />
                   <StackPanel Grid.Column="1">
                     <TextBlock Classes="section" Text="Security alerts" />

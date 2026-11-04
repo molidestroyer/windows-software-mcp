@@ -83,6 +83,13 @@ on Windows.
   from `%TEMP%` and exit at once. After a "success", while the ARP entry is still there and any
   process runs from `%TEMP%`, the operation (and the queue) stays open, max 10 min. No temp process →
   return at once with no extra registry read (`UninstallMany_ResolvesTheInventoryOnce`).
+- **Administrator rights once per batch** (opt-in `ElevateBatches`): `BatchRunner` sends Update all,
+  bulk uninstall and restore to `UacBatchElevator`, which starts `SoftwareDock.exe --elevated-worker
+  <pipe> <pid>` with `runas` (one UAC) and talks JSON lines (`BatchProtocol`, source-generated JSON)
+  over a named pipe. Trust boundary: pipe ACL = current user, dock checks client PID, worker checks
+  server PID + same executable, worker gets typed items and re-validates (`ApplicationKey`,
+  `PackageId`) — never a command line. One batch, then the worker exits. Never for scheduled
+  updates (nobody answers the prompt) nor the MCP server. Invalidate the dock's inventory after.
 - **Anchored panel never auto-hides while `IsBusy`:** installers, WinGet and UAC steal the focus
   mid-operation. Headless tests raise `Deactivated` by reflection (it is internal in Avalonia 12).
 
@@ -100,6 +107,9 @@ on Windows.
 - MCP smoke scripts: drive `%LOCALAPPDATA%\SoftwareDock\current\SoftwareDock.Mcp.exe --read-only` from
   PowerShell. Python from the Python Install Manager (MSIX) virtualizes `%LOCALAPPDATA%` and gets
   `WinError 2` launching it. `SoftwareDock.exe` is a WinExe: `--print-config` lives on `SoftwareDock.Mcp.exe`.
+- Elevated batches: QA with a harmless request (uninstall a key that does not exist) from a
+  file-based harness that calls `UacBatchElevator` and, when started with `--elevated-worker`,
+  `ElevatedWorker.Run` by reflection. File-based apps compile with AOT defaults: reflection JSON is off.
 - Self-update check: run the installed older version; wait for `packages\SoftwareDock-<new>-full.nupkg`
   (~70 s; the delta appears first and is rebuilt into the full). Applying before the full exists
   re-applies the old version.

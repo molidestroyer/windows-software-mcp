@@ -15,6 +15,12 @@ internal static class Program
         // arguments, and this handles them and exits before any window exists.
         Velopack.VelopackApp.Build().Run();
 
+        // One elevated batch for the dock (UacBatchElevator): no window, no single-instance lock.
+        if (OperatingSystem.IsWindows() && args.Length > 0 && args[0] == Services.UacBatchElevator.WorkerArgument)
+        {
+            return Services.ElevatedWorker.Run(args);
+        }
+
         using var instance = SingleInstance.TryAcquire();
         if (instance is null)
         {

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using SoftwareDock.App.Services;
 using SoftwareDock.Application.Operations;
 using SoftwareDock.Domain.Backup;
 using SoftwareDock.Domain.Packages;
@@ -11,7 +12,7 @@ namespace SoftwareDock.App.ViewModels;
 /// <summary>"Restore from backup": what the backup has that this PC does not, ready to install in one go.</summary>
 public sealed partial class RestoreViewModel : ObservableObject
 {
-    private readonly ISoftwareOperations _operations;
+    private readonly BatchRunner _batches;
     private readonly Action<string, bool> _status;
     private readonly Action _close;
 
@@ -22,11 +23,11 @@ public sealed partial class RestoreViewModel : ObservableObject
     [ObservableProperty]
     private string? _progressText;
 
-    public RestoreViewModel(SoftwareManifest manifest, RestorePlan plan, ISoftwareOperations operations, Action<string, bool> status, Action close)
+    public RestoreViewModel(SoftwareManifest manifest, RestorePlan plan, BatchRunner batches, Action<string, bool> status, Action close)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(plan);
-        _operations = operations;
+        _batches = batches;
         _status = status;
         _close = close;
 
@@ -92,10 +93,9 @@ public sealed partial class RestoreViewModel : ObservableObject
         try
         {
             var progress = new Progress<BatchProgress>(p => ProgressText = $"Installing {p.Position} of {p.Total} · {p.ItemName}{(p.Line is null ? string.Empty : $" — {p.Line}")}");
-            var result = await _operations.InstallManyAsync(
+            var result = await _batches.InstallManyAsync(
                 selected.Select(p => new InstallRequest(p.Package.Id, Source: p.Package.Source)).ToList(),
-                progress,
-                CancellationToken.None);
+                progress);
 
             for (var i = 0; i < selected.Count; i++)
             {

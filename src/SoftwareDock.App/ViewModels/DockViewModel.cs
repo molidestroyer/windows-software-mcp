@@ -34,6 +34,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
 
     private readonly ISoftwareInventory _inventory;
     private readonly ISoftwareOperations _operations;
+    private readonly BatchRunner _batches;
     private readonly IPackageManager _catalog;
     private readonly IIconProvider _icons;
     private readonly IUserSettingsStore _settings;
@@ -132,6 +133,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     public DockViewModel(
         ISoftwareInventory inventory,
         ISoftwareOperations operations,
+        BatchRunner batches,
         IPackageManager catalog,
         IIconProvider icons,
         IUserSettingsStore settings,
@@ -150,6 +152,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         ArgumentNullException.ThrowIfNull(settingsPage);
         _inventory = inventory;
         _operations = operations;
+        _batches = batches;
         _catalog = catalog;
         _icons = icons;
         _settings = settings;
@@ -443,7 +446,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
 
         try
         {
-            var result = await _operations.UninstallManyAsync(selected.Select(i => i.Key).ToList(), UninstallMode.Silent, progress, CancellationToken.None);
+            var result = await _batches.UninstallManyAsync(selected.Select(i => i.Key).ToList(), progress);
             Volatile.Write(ref finished, true);
             SetStatus($"Bulk uninstall: {result.Summary}", isError: result.Failed > 0);
         }
@@ -471,10 +474,43 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task UpgradeAllAsync()
     {
-        foreach (var item in Applications.Where(a => a.CanUpgrade).ToList())
+        var items = Applications.Where(a => a.CanUpgrade).ToList();
+        if (items.Count == 0)
         {
-            await UpgradeAsync(item);
+            return;
         }
+
+        // One batch, not one operation per app: with "administrator rights once per batch" on,
+        // that is one UAC prompt for all of them.
+        foreach (var item in items)
+        {
+            item.IsWorking = true;
+        }
+
+        IsBusy = ++_runningOperations > 0;
+        try
+        {
+            var result = await _batches.UpgradeManyAsync(
+                items.Select(i => i.Key).ToList(),
+                new Progress<BatchProgress>(p => SetStatus($"Updating {p.Position} of {p.Total} · {p.ItemName}{(p.Line is null ? string.Empty : $" — {p.Line}")}", isError: false)));
+            SetStatus($"Update all: {result.Summary}", isError: result.Failed > 0);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            LogOperationFailed(ex, "Update all");
+            SetStatus($"Update all failed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            foreach (var item in items)
+            {
+                item.IsWorking = false;
+            }
+
+            IsBusy = --_runningOperations > 0;
+        }
+
+        await LoadAsync();
     }
 
     /// <summary>
@@ -547,7 +583,7 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         try
         {
             var plan = await _backup.PlanRestoreAsync(manifest, CancellationToken.None);
-            Restore = new RestoreViewModel(manifest, plan, _operations, SetStatus, CloseRestore);
+            Restore = new RestoreViewModel(manifest, plan, _batches, SetStatus, CloseRestore);
             Page = DockPage.Restore;
         }
         finally

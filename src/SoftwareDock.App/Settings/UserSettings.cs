@@ -36,6 +36,9 @@ public sealed record UserSettings
 
     public bool SecurityAlerts { get; init; } = true;
 
+    /// <summary>Bulk uninstall, Update all and restore ask for administrator rights once, for the whole batch.</summary>
+    public bool ElevateBatches { get; init; }
+
     public UpdateScheduleMode ScheduledUpdates { get; init; } = UpdateScheduleMode.Off;
 
     public int ScheduledUpdateHour { get; init; } = 3;
