@@ -55,6 +55,41 @@ public sealed class DockWindowRenderTests : IClassFixture<HeadlessSession>
         Assert.True(pixels > 0);
     }
 
+    [Theory]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task AnchoredDock_LosingFocus_HidesOnlyWhenIdle(bool busy, bool staysVisible)
+    {
+        // QA, 0.3.1: an installer or UAC prompt took the focus mid-update and the panel vanished.
+        var visible = await _session.Session.Dispatch(
+            () =>
+            {
+                using var services = TestServices.Create();
+                var viewModel = services.GetRequiredService<DockViewModel>();
+                var window = services.GetRequiredService<DockWindow>();
+                viewModel.IsPinned = true;
+                viewModel.StopMonitoring();
+                window.Show();
+                window.Activate();
+                viewModel.IsBusy = busy;
+
+                // Headless does not deactivate a window when another one activates, and the platform
+                // callback is internal in Avalonia 12: raise it by reflection, as Windows would.
+                var deactivated = typeof(Avalonia.Platform.IWindowBaseImpl)
+                    .GetProperty("Deactivated", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic)!
+                    .GetValue(window.PlatformImpl) as Action;
+                deactivated!.Invoke();
+                Dispatcher.UIThread.RunJobs();
+
+                var result = window.IsVisible;
+                window.Close();
+                return result;
+            },
+            CancellationToken.None);
+
+        Assert.Equal(staysVisible, visible);
+    }
+
     private static async Task ArrangeAsync(string scene, DockViewModel viewModel)
     {
         switch (scene)

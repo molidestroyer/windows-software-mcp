@@ -77,6 +77,8 @@ on Windows.
 - **The app targets `net10.0-windows10.0.19041.0`** (toasts); tests for it target the same TFM.
 - **Anchored panel + dialogs:** wrap any picker/dialog in `DockWindow.SuspendAutoHide()`, or the
   panel hides when the dialog takes focus.
+- **Anchored panel never auto-hides while `IsBusy`:** installers, WinGet and UAC steal the focus
+  mid-operation. Headless tests raise `Deactivated` by reflection (it is internal in Avalonia 12).
 
 ## Testing on a real PC (QA) — non-negotiable
 

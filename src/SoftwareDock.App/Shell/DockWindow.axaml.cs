@@ -56,7 +56,9 @@ public partial class DockWindow : Window
         };
         Deactivated += (_, _) =>
         {
-            if (_viewModel?.IsPinned == true && _autoHideSuspensions == 0)
+            // While an operation runs, installers, WinGet and UAC take the focus: the panel stays
+            // so its progress stays visible. The next deactivation after it finishes hides it.
+            if (_viewModel?.IsPinned == true && _autoHideSuspensions == 0 && !_viewModel.IsBusy)
             {
                 Hide();
             }
