@@ -72,9 +72,11 @@ public sealed partial record UninstallCommand
 
     /// <summary>
     /// The command to run. For Windows Installer packages the registered verb is frequently
-    /// <c>/I</c> (which opens the <em>repair</em> dialog), so it is always rewritten to <c>/X</c>;
-    /// <paramref name="silent"/> adds <c>/qn /norestart</c>. Other uninstallers are returned
-    /// untouched — their silent switches are not ours to guess.
+    /// <c>/I</c> (which opens the <em>repair</em> dialog), so it is always rewritten to <c>/X</c>.
+    /// <paramref name="silent"/> adds <c>/passive /norestart</c>, not <c>/qn</c>: a fully quiet
+    /// Windows Installer session cannot raise a UAC prompt, so removing a per-machine package from
+    /// a non-elevated process fails with 1603. <c>/passive</c> needs no clicks and can still elevate.
+    /// Other uninstallers are returned untouched — their silent switches are not ours to guess.
     /// </summary>
     public (string FileName, string Arguments) ToProcessCommand(bool silent)
     {
@@ -84,7 +86,7 @@ public sealed partial record UninstallCommand
         }
 
         var arguments = $"/X{MsiProductCode}";
-        return (MsiExec, silent ? $"{arguments} /qn /norestart" : arguments);
+        return (MsiExec, silent ? $"{arguments} /passive /norestart" : arguments);
     }
 
     /// <summary>

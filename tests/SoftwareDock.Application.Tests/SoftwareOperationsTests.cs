@@ -67,6 +67,29 @@ public sealed class SoftwareOperationsTests : IDisposable
     }
 
     [Fact]
+    public async Task Uninstall_SilentPerMachineMsi_UsesMsiexecEvenWhenWinGetKnowsIt()
+    {
+        _registry.Entries.Add(Apps.Registry("{M}", "Msi app", uninstall: MsiUninstall));
+        _packages.Installed.Add(new InstalledPackage("Msi app", PackageId.Parse("Vendor.MsiApp"), "1.0", null, "winget"));
+
+        await _sut.UninstallAsync(Key("{M}"), UninstallMode.Silent, null, CancellationToken.None);
+
+        Assert.Empty(_packages.Calls);
+        Assert.True(Assert.Single(_uninstaller.Runs).Command.IsWindowsInstaller);
+    }
+
+    [Fact]
+    public async Task Uninstall_InteractivePerMachineMsi_StillPrefersWinGet()
+    {
+        _registry.Entries.Add(Apps.Registry("{M}", "Msi app", uninstall: MsiUninstall));
+        _packages.Installed.Add(new InstalledPackage("Msi app", PackageId.Parse("Vendor.MsiApp"), "1.0", null, "winget"));
+
+        await _sut.UninstallAsync(Key("{M}"), UninstallMode.Interactive, null, CancellationToken.None);
+
+        Assert.Equal(["uninstall Vendor.MsiApp silent=False"], _packages.Calls);
+    }
+
+    [Fact]
     public async Task Uninstall_SilentUnknownExe_FallsBackToInteractive()
     {
         _registry.Entries.Add(Apps.Registry("{E}", "Exe app", uninstall: @"""C:\E\remove.exe"""));

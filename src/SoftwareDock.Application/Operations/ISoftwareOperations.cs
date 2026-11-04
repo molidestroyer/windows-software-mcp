@@ -27,6 +27,9 @@ public interface ISoftwareOperations
     /// </summary>
     Task<BatchResult> UninstallManyAsync(IReadOnlyList<ApplicationKey> keys, UninstallMode mode, IProgress<BatchProgress>? progress, CancellationToken cancellationToken);
 
+    /// <summary>Upgrades several applications one after another — "update all", by hand or on a schedule.</summary>
+    Task<BatchResult> UpgradeManyAsync(IReadOnlyList<ApplicationKey> keys, IProgress<BatchProgress>? progress, CancellationToken cancellationToken);
+
     /// <summary>Installs several packages one after another, with the same failure rules as <see cref="UninstallManyAsync"/>.</summary>
     Task<BatchResult> InstallManyAsync(IReadOnlyList<InstallRequest> requests, IProgress<BatchProgress>? progress, CancellationToken cancellationToken);
 }
