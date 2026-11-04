@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:SoftwareDock.App.ViewModels"
+        xmlns:controls="using:SoftwareDock.App.Controls"
         x:Class="SoftwareDock.App.Shell.DockWindow"
         x:DataType="vm:DockViewModel"
         Title="Software Dock"
@@ -15,10 +16,10 @@
         Background="Transparent">
 
   <Border Classes="panel">
-    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto">
 
       <!-- Header: also the drag handle when the dock floats -->
-      <Border x:Name="Header" Grid.Row="0" Background="{StaticResource HeaderGlowBrush}" Padding="18,16,12,12">
+      <Border x:Name="Header" Grid.Row="0" Background="{StaticResource HeaderGlowBrush}" Padding="18,16,12,10">
         <Grid ColumnDefinitions="Auto,*,Auto">
           <Image Source="avares://SoftwareDock/Assets/app.png" Width="36" Height="36" VerticalAlignment="Center" />
           <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" Spacing="1">
@@ -26,8 +27,11 @@
             <TextBlock Classes="caption" Text="{Binding Summary}" />
           </StackPanel>
           <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Top">
-            <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh">
+            <Button Classes="icon" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh (F5)">
               <PathIcon Data="{StaticResource IconRefresh}" />
+            </Button>
+            <Button Classes="icon" Command="{Binding ToggleSettingsCommand}" ToolTip.Tip="Settings">
+              <PathIcon Data="{StaticResource IconSettings}" />
             </Button>
             <Button Classes="icon" Command="{Binding TogglePinCommand}" ToolTip.Tip="Pin to the right edge / float">
               <Panel>
@@ -42,146 +46,390 @@
         </Grid>
       </Border>
 
-      <!-- Search -->
-      <Panel Grid.Row="1" Margin="16,4,16,10">
-        <TextBox x:Name="SearchBox" Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchWatermark}" />
-        <PathIcon Data="{StaticResource IconSearch}" Width="15" Height="15" Margin="14,0,0,0"
-                  HorizontalAlignment="Left" VerticalAlignment="Center"
-                  Foreground="{StaticResource TextMutedBrush}" IsHitTestVisible="False" />
-      </Panel>
+      <!-- The dock's own update -->
+      <Border Grid.Row="1" IsVisible="{Binding HasAppUpdate}" Margin="16,0,16,8" Padding="12,8" CornerRadius="12" Background="#266366F1">
+        <Grid ColumnDefinitions="*,Auto">
+          <TextBlock Text="{Binding AppUpdateText}" VerticalAlignment="Center" FontSize="12.5" FontWeight="Medium" Foreground="#C7D2FE" />
+          <Button Grid.Column="1" Classes="action primary" Content="Restart to update" Command="{Binding ApplyAppUpdateCommand}" />
+        </Grid>
+      </Border>
 
-      <!-- Sections -->
-      <Grid Grid.Row="2" Margin="16,0,16,8" ColumnDefinitions="Auto,Auto,Auto,*">
-        <RadioButton Grid.Column="0" Classes="tab" GroupName="section" IsChecked="{Binding IsInstalledSection}">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Installed" VerticalAlignment="Center" />
-            <Border Classes="count"><TextBlock Text="{Binding InstalledCount}" /></Border>
-          </StackPanel>
-        </RadioButton>
-        <RadioButton Grid.Column="1" Classes="tab" GroupName="section" IsChecked="{Binding IsUpdatesSection}" Margin="4,0,0,0">
-          <StackPanel Orientation="Horizontal">
-            <TextBlock Text="Updates" VerticalAlignment="Center" />
-            <Border Classes="count warn" IsVisible="{Binding HasUpdates}"><TextBlock Text="{Binding UpdateCount}" /></Border>
-          </StackPanel>
-        </RadioButton>
-        <RadioButton Grid.Column="2" Classes="tab" GroupName="section" IsChecked="{Binding IsDiscoverSection}" Margin="4,0,0,0">
-          <StackPanel Orientation="Horizontal" Spacing="6">
-            <PathIcon Data="{StaticResource IconSparkle}" Width="12" Height="12" />
-            <TextBlock Text="Discover" VerticalAlignment="Center" />
-          </StackPanel>
-        </RadioButton>
-      </Grid>
+      <Panel Grid.Row="2">
 
-      <ProgressBar Grid.Row="3" Classes="activity" IsIndeterminate="True" IsVisible="{Binding IsActivityVisible}" Margin="16,0" />
+        <!-- ============ Main page ============ -->
+        <Grid IsVisible="{Binding IsMainPage}" RowDefinitions="Auto,Auto,Auto,Auto,Auto,*,Auto">
 
-      <!-- Lists -->
-      <Panel Grid.Row="4">
-        <DockPanel IsVisible="{Binding !IsDiscoverSection}">
-          <Border DockPanel.Dock="Top" IsVisible="{Binding ShowUpdateAll}" Margin="16,8,16,2" Padding="12,8"
-                  CornerRadius="12" Background="{StaticResource UpdateSoftBrush}">
-            <Grid ColumnDefinitions="*,Auto">
-              <TextBlock Text="{Binding UpdateBanner}" VerticalAlignment="Center" FontSize="12.5" FontWeight="Medium"
-                         Foreground="{StaticResource UpdateBrush}" />
-              <Button Grid.Column="1" Classes="action update" Background="#33F59E0B" Command="{Binding UpgradeAllCommand}">
+          <!-- CPU and memory gauges -->
+          <Grid Grid.Row="0" ColumnDefinitions="*,10,*" Margin="16,0,16,10" IsVisible="{Binding HasResourceData}">
+            <Border Classes="card" Margin="0" Padding="12,10">
+              <Grid ColumnDefinitions="Auto,*">
+                <Panel Width="46" Height="46">
+                  <controls:GaugeRing Value="{Binding CpuFraction}" Foreground="{Binding CpuBrush}" Thickness="5" />
+                  <TextBlock Text="{Binding CpuText}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" />
+                </Panel>
+                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Spacing="1">
+                  <TextBlock Classes="section" Text="CPU" />
+                  <TextBlock Classes="meta" Text="{Binding AppsCpuText}" ToolTip.Tip="{Binding AppsMemoryText}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+            <Border Grid.Column="2" Classes="card" Margin="0" Padding="12,10">
+              <Grid ColumnDefinitions="Auto,*">
+                <Panel Width="46" Height="46">
+                  <controls:GaugeRing Value="{Binding MemoryFraction}" Foreground="{Binding MemoryBrush}" Thickness="5" />
+                  <TextBlock Text="{Binding MemoryPercentText}" FontSize="11" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource TextPrimaryBrush}" />
+                </Panel>
+                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center" Spacing="1">
+                  <TextBlock Classes="section" Text="Memory" />
+                  <TextBlock Classes="meta" Text="{Binding MemoryText}" ToolTip.Tip="{Binding MemoryDetail}" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </Grid>
+
+          <!-- Search -->
+          <Panel Grid.Row="1" Margin="16,0,16,10">
+            <TextBox x:Name="SearchBox" Classes="search" Text="{Binding SearchText}" PlaceholderText="{Binding SearchWatermark}" />
+            <PathIcon Data="{StaticResource IconSearch}" Width="15" Height="15" Margin="14,0,0,0"
+                      HorizontalAlignment="Left" VerticalAlignment="Center"
+                      Foreground="{StaticResource TextMutedBrush}" IsHitTestVisible="False" />
+          </Panel>
+
+          <!-- Sections -->
+          <StackPanel Grid.Row="2" Orientation="Horizontal" Margin="16,0,16,8" Spacing="4">
+            <RadioButton Classes="tab" GroupName="section" IsChecked="{Binding IsInstalledSection}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Installed" VerticalAlignment="Center" />
+                <Border Classes="count"><TextBlock Text="{Binding InstalledCount}" /></Border>
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Classes="tab" GroupName="section" IsChecked="{Binding IsUpdatesSection}">
+              <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Updates" VerticalAlignment="Center" />
+                <Border Classes="count warn" IsVisible="{Binding HasUpdates}"><TextBlock Text="{Binding UpdateCount}" /></Border>
+              </StackPanel>
+            </RadioButton>
+            <RadioButton Classes="tab" GroupName="section" IsChecked="{Binding IsDiscoverSection}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource IconSparkle}" Width="12" Height="12" />
+                <TextBlock Text="Discover" VerticalAlignment="Center" />
+              </StackPanel>
+            </RadioButton>
+          </StackPanel>
+
+          <!-- Toolbar: sort and multi-select -->
+          <Grid Grid.Row="3" Margin="16,0,16,4" ColumnDefinitions="Auto,*,Auto,Auto" IsVisible="{Binding ShowListToolbar}">
+            <ComboBox Classes="sort" ItemsSource="{Binding SortOptions}" SelectedItem="{Binding SelectedSort}" ToolTip.Tip="Sort" />
+            <Button Grid.Column="2" Classes="action" Margin="0,0,6,0" Content="All" Command="{Binding SelectAllCommand}" IsVisible="{Binding IsSelecting}" ToolTip.Tip="Select or clear all" />
+            <ToggleButton Grid.Column="3" Classes="chip" IsChecked="{Binding IsSelecting}" ToolTip.Tip="Select several apps to uninstall at once">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <PathIcon Data="{StaticResource IconSelect}" />
+                <TextBlock Text="Select" VerticalAlignment="Center" />
+              </StackPanel>
+            </ToggleButton>
+          </Grid>
+
+          <ProgressBar Grid.Row="4" Classes="activity" IsIndeterminate="True" IsVisible="{Binding IsActivityVisible}" Margin="16,2,16,0" />
+
+          <!-- Lists -->
+          <Panel Grid.Row="5">
+            <DockPanel IsVisible="{Binding !IsDiscoverSection}">
+              <Border DockPanel.Dock="Top" IsVisible="{Binding ShowUpdateAll}" Margin="16,6,16,2" Padding="12,8"
+                      CornerRadius="12" Background="{StaticResource UpdateSoftBrush}">
+                <Grid ColumnDefinitions="*,Auto">
+                  <TextBlock Text="{Binding UpdateBanner}" VerticalAlignment="Center" FontSize="12.5" FontWeight="Medium"
+                             Foreground="{StaticResource UpdateBrush}" />
+                  <Button Grid.Column="1" Classes="action update" Background="#33F59E0B" Command="{Binding UpgradeAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                      <PathIcon Data="{StaticResource IconArrowUp}" />
+                      <TextBlock Text="Update all" />
+                    </StackPanel>
+                  </Button>
+                </Grid>
+              </Border>
+              <ScrollViewer Padding="10,6,10,6">
+                <ItemsControl ItemsSource="{Binding Applications}">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ApplicationItemViewModel">
+                      <Border Classes="row">
+                        <Grid ColumnDefinitions="Auto,Auto,*,Auto">
+                          <CheckBox VerticalAlignment="Center" Margin="0,0,10,0" IsChecked="{Binding IsSelected}"
+                                    IsVisible="{Binding $parent[ItemsControl].((vm:DockViewModel)DataContext).IsSelecting}"
+                                    IsEnabled="{Binding CanSelect}" />
+                          <Border Grid.Column="1" Classes="avatar" Background="{Binding AvatarBrush}" VerticalAlignment="Top">
+                            <Panel>
+                              <TextBlock Text="{Binding Initials}" IsVisible="{Binding !HasIcon}" />
+                              <Border Background="#F2FFFFFF" IsVisible="{Binding HasIcon}">
+                                <Image Source="{Binding Icon}" Width="26" Height="26" />
+                              </Border>
+                            </Panel>
+                          </Border>
+                          <StackPanel Grid.Column="2" Margin="12,0,8,0" VerticalAlignment="Center">
+                            <TextBlock Classes="name" Text="{Binding Name}" />
+                            <TextBlock Classes="meta" Text="{Binding Subtitle}" />
+                            <WrapPanel>
+                              <Border Classes="badge" IsVisible="{Binding HasUpdate}" Margin="0,4,6,0">
+                                <TextBlock Text="{Binding UpdateText}" />
+                              </Border>
+                              <Border Classes="running" IsVisible="{Binding IsRunning}">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                  <controls:GaugeRing Width="11" Height="11" Thickness="2.2" Value="{Binding CpuFraction}" Foreground="{Binding CpuBrush}" VerticalAlignment="Center" />
+                                  <TextBlock Text="{Binding UsageText}" />
+                                </StackPanel>
+                              </Border>
+                            </WrapPanel>
+                          </StackPanel>
+                          <Panel Grid.Column="3" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding ShowActions}">
+                              <Button Classes="action update" IsVisible="{Binding ShowUpgrade}" Command="{Binding UpgradeCommand}" ToolTip.Tip="Update">
+                                <StackPanel Orientation="Horizontal" Spacing="5">
+                                  <PathIcon Data="{StaticResource IconArrowUp}" />
+                                  <TextBlock Text="Update" />
+                                </StackPanel>
+                              </Button>
+                              <Button Classes="action ghost" Padding="0" Width="30" IsVisible="{Binding ShowUninstall}" Command="{Binding RequestUninstallCommand}" ToolTip.Tip="Uninstall">
+                                <PathIcon Data="{StaticResource IconTrash}" />
+                              </Button>
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConfirmingUninstall}">
+                              <Button Classes="action danger" Content="Remove" Command="{Binding ConfirmUninstallCommand}" />
+                              <Button Classes="action" Content="Cancel" Command="{Binding CancelUninstallCommand}" />
+                            </StackPanel>
+                            <ProgressBar IsVisible="{Binding IsWorking}" IsIndeterminate="True" Width="56" Classes="activity" />
+                          </Panel>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </ScrollViewer>
+            </DockPanel>
+
+            <ScrollViewer IsVisible="{Binding IsDiscoverSection}" Padding="10,6,10,6">
+              <ItemsControl ItemsSource="{Binding CatalogResults}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:CatalogItemViewModel">
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="Auto,*,Auto">
+                        <Border Classes="avatar" Background="{Binding AvatarBrush}">
+                          <TextBlock Text="{Binding Initials}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
+                          <TextBlock Classes="name" Text="{Binding Name}" />
+                          <TextBlock Classes="meta" Text="{Binding Subtitle}" />
+                        </StackPanel>
+                        <Panel Grid.Column="2" VerticalAlignment="Center">
+                          <Button Classes="action primary" IsVisible="{Binding ShowInstall}" Command="{Binding InstallCommand}">
+                            <StackPanel Orientation="Horizontal" Spacing="5">
+                              <PathIcon Data="{StaticResource IconDownload}" />
+                              <TextBlock Text="Install" />
+                            </StackPanel>
+                          </Button>
+                          <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding IsInstalled}" Margin="0,0,6,0">
+                            <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="{StaticResource SuccessBrush}" />
+                            <TextBlock Text="Installed" FontSize="12" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" />
+                          </StackPanel>
+                          <ProgressBar IsVisible="{Binding IsWorking}" IsIndeterminate="True" Width="56" Classes="activity" />
+                        </Panel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </ScrollViewer>
+
+            <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Margin="32">
+              <PathIcon Data="{StaticResource IconSparkle}" Width="28" Height="28" Foreground="{StaticResource AccentStart}" />
+              <TextBlock Text="{Binding EmptyMessage}" TextAlignment="Center" TextWrapping="Wrap" Classes="caption" />
+            </StackPanel>
+          </Panel>
+
+          <!-- Bulk uninstall bar -->
+          <Border Grid.Row="6" IsVisible="{Binding ShowBulkBar}" Margin="12,4,12,8" Padding="14,8" CornerRadius="12" Background="#E61F1F2A"
+                  BorderBrush="{StaticResource StrokeBrush}" BorderThickness="1">
+            <Panel>
+              <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding !IsConfirmingBulk}">
+                <TextBlock Text="{Binding BulkLabel}" VerticalAlignment="Center" Classes="section" />
+                <Button Grid.Column="1" Classes="action danger" Command="{Binding RequestBulkUninstallCommand}">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <PathIcon Data="{StaticResource IconTrash}" />
+                    <TextBlock Text="Uninstall" />
+                  </StackPanel>
+                </Button>
+              </Grid>
+              <Grid ColumnDefinitions="*,Auto,Auto" IsVisible="{Binding IsConfirmingBulk}">
+                <TextBlock Text="{Binding BulkConfirmLabel}" VerticalAlignment="Center" Classes="section" />
+                <Button Grid.Column="1" Classes="action danger" Content="Remove" Margin="0,0,4,0" Command="{Binding ConfirmBulkUninstallCommand}" />
+                <Button Grid.Column="2" Classes="action" Content="Cancel" Command="{Binding CancelBulkUninstallCommand}" />
+              </Grid>
+            </Panel>
+          </Border>
+        </Grid>
+
+        <!-- ============ Settings page ============ -->
+        <ScrollViewer IsVisible="{Binding IsSettingsPage}" Padding="16,0,16,8">
+          <StackPanel DataContext="{Binding SettingsPage}" x:DataType="vm:SettingsViewModel">
+            <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10">
+              <Button Classes="icon" Command="{Binding $parent[Window].((vm:DockViewModel)DataContext).ToggleSettingsCommand}" ToolTip.Tip="Back">
+                <PathIcon Data="{StaticResource IconBack}" />
+              </Button>
+              <TextBlock Grid.Column="1" Classes="title" FontSize="15" Text="Settings" VerticalAlignment="Center" Margin="6,0,0,0" />
+            </Grid>
+
+            <Border Classes="card">
+              <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <PathIcon Data="{StaticResource IconPower}" Width="16" Height="16" Foreground="{StaticResource AccentStart}" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="Start with Windows" />
+                    <TextBlock Classes="hint" Text="Sits in the tray from sign-in, ready on the hotkey." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding StartWithWindows}" IsEnabled="{Binding CanStartWithWindows}" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <PathIcon Data="{StaticResource IconArrowUp}" Width="16" Height="16" Foreground="{StaticResource UpdateBrush}" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="Check for software updates" />
+                    <TextBlock Classes="hint" Text="{Binding SoftwareUpdateInterval}" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding CheckForSoftwareUpdates}" />
+                </Grid>
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <controls:GaugeRing Width="16" Height="16" Thickness="2.5" Value="0.66" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="Show CPU and memory" />
+                    <TextBlock Classes="hint" Text="Gauges for running apps. Measured only while the panel is open." />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding ShowResourceUsage}" />
+                </Grid>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <PathIcon Data="{StaticResource IconBackup}" Width="16" Height="16" Foreground="#38BDF8" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="Automatic backup" />
+                    <TextBlock Classes="hint" Text="{Binding LastBackupText}" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding AutomaticBackup}" />
+                </Grid>
+                <Button Classes="action ghost" Padding="0" HorizontalAlignment="Left" Command="{Binding OpenBackupFolderCommand}">
+                  <TextBlock Text="{Binding BackupFolder}" Classes="hint" TextTrimming="CharacterEllipsis" TextDecorations="Underline" />
+                </Button>
+                <WrapPanel>
+                  <Button Classes="action" Margin="0,0,6,6" Content="Export…" Command="{Binding ExportBackupCommand}" />
+                  <Button Classes="action" Margin="0,0,6,6" Content="Export for winget…" Command="{Binding ExportWinGetCommand}" />
+                  <Button Classes="action primary" Margin="0,0,6,6" Content="Restore from backup…" Command="{Binding ImportBackupCommand}" />
+                </WrapPanel>
+                <TextBlock Classes="hint" Text="New PC? Restore here, or run: winget import -i software-winget.json" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,*">
+                  <PathIcon Data="{StaticResource IconAgent}" Width="16" Height="16" Foreground="{StaticResource AccentEnd}" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="AI agents (MCP)" />
+                    <TextBlock Classes="hint" Text="Let Claude Code, Copilot or any MCP client list, update, install and remove software on this PC." />
+                  </StackPanel>
+                </Grid>
+                <Button Classes="action" HorizontalAlignment="Left" Content="Copy MCP config" Command="{Binding CopyMcpConfigCommand}" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card">
+              <StackPanel Spacing="10">
+                <Grid ColumnDefinitions="Auto,*,Auto">
+                  <Image Source="avares://SoftwareDock/Assets/app.png" Width="16" Height="16" VerticalAlignment="Top" Margin="0,2,10,0" />
+                  <StackPanel Grid.Column="1">
+                    <TextBlock Classes="section" Text="{Binding AppVersion}" />
+                    <TextBlock Classes="hint" Text="Update automatically from GitHub releases" />
+                  </StackPanel>
+                  <ToggleSwitch Grid.Column="2" IsChecked="{Binding AutoUpdateApp}" IsEnabled="{Binding CanUpdateApp}" />
+                </Grid>
+                <StackPanel Orientation="Horizontal" Spacing="10">
+                  <Button Classes="action" Content="Check now" Command="{Binding CheckAppUpdateCommand}" IsEnabled="{Binding CanUpdateApp}" />
+                  <TextBlock Classes="hint" VerticalAlignment="Center" Text="{Binding AppUpdateStatus}" />
+                </StackPanel>
+              </StackPanel>
+            </Border>
+
+            <TextBlock Classes="hint" Text="{Binding Message}" Classes.error="{Binding MessageIsError}" Margin="2,0,2,8" />
+          </StackPanel>
+        </ScrollViewer>
+
+        <!-- ============ Restore page ============ -->
+        <Grid IsVisible="{Binding IsRestorePage}" RowDefinitions="Auto,*,Auto" Margin="16,0,16,8">
+          <Grid ColumnDefinitions="Auto,*" Margin="0,0,0,10" DataContext="{Binding Restore}" x:DataType="vm:RestoreViewModel">
+            <Button Classes="icon" Command="{Binding CancelCommand}" ToolTip.Tip="Back">
+              <PathIcon Data="{StaticResource IconBack}" />
+            </Button>
+            <StackPanel Grid.Column="1" Margin="6,0,0,0">
+              <TextBlock Classes="title" FontSize="15" Text="Restore from backup" />
+              <TextBlock Classes="hint" Text="{Binding Source}" />
+            </StackPanel>
+          </Grid>
+          <ScrollViewer Grid.Row="1" DataContext="{Binding Restore}" x:DataType="vm:RestoreViewModel">
+            <StackPanel Spacing="4">
+              <TextBlock Classes="hint" Text="{Binding AlreadyInstalledText}" IsVisible="{Binding AlreadyInstalledText, Converter={x:Static ObjectConverters.IsNotNull}}" Margin="2,0,0,6" />
+              <ItemsControl ItemsSource="{Binding Packages}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate x:DataType="vm:RestoreItemViewModel">
+                    <Border Classes="row">
+                      <Grid ColumnDefinitions="Auto,*">
+                        <CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" Margin="0,0,10,0" />
+                        <StackPanel Grid.Column="1">
+                          <TextBlock Classes="name" Text="{Binding Name}" />
+                          <TextBlock Classes="meta" Text="{Binding Subtitle}" />
+                          <TextBlock Classes="hint" Text="{Binding Outcome}" IsVisible="{Binding Outcome, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+              <TextBlock Classes="caption" Text="Everything in this backup is already installed." IsVisible="{Binding !HasPackages}" Margin="2,8" />
+              <Border Classes="card" IsVisible="{Binding HasManual}" Margin="0,8,0,0">
+                <StackPanel Spacing="4">
+                  <TextBlock Classes="section" Text="Install these by hand" />
+                  <TextBlock Classes="hint" Text="No package manager knows them, so they cannot be restored automatically." />
+                  <ItemsControl ItemsSource="{Binding Manual}" Margin="0,4,0,0">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="x:String">
+                        <TextBlock Classes="meta" Text="{Binding}" Margin="0,2" />
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </StackPanel>
+          </ScrollViewer>
+          <StackPanel Grid.Row="2" Spacing="6" Margin="0,8,0,0" DataContext="{Binding Restore}" x:DataType="vm:RestoreViewModel">
+            <TextBlock Classes="hint" Text="{Binding ProgressText}" TextTrimming="CharacterEllipsis" />
+            <Grid ColumnDefinitions="*,Auto,Auto">
+              <TextBlock Classes="caption" VerticalAlignment="Center">
+                <Run Text="{Binding SelectedCount}" /><Run Text=" selected" />
+              </TextBlock>
+              <Button Grid.Column="1" Classes="action" Content="Cancel" Margin="0,0,6,0" Command="{Binding CancelCommand}" />
+              <Button Grid.Column="2" Classes="action primary" Command="{Binding InstallCommand}" IsEnabled="{Binding CanInstall}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                  <PathIcon Data="{StaticResource IconArrowUp}" />
-                  <TextBlock Text="Update all" />
+                  <PathIcon Data="{StaticResource IconDownload}" />
+                  <TextBlock Text="{Binding InstallLabel}" />
                 </StackPanel>
               </Button>
             </Grid>
-          </Border>
-        <ScrollViewer Padding="10,6,10,6">
-          <ItemsControl ItemsSource="{Binding Applications}">
-            <ItemsControl.ItemsPanel>
-              <ItemsPanelTemplate><VirtualizingStackPanel /></ItemsPanelTemplate>
-            </ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:ApplicationItemViewModel">
-                <Border Classes="row">
-                  <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Classes="avatar" Background="{Binding AvatarBrush}" VerticalAlignment="Top">
-                      <Panel>
-                        <TextBlock Text="{Binding Initials}" IsVisible="{Binding !HasIcon}" />
-                        <Border Background="#F2FFFFFF" IsVisible="{Binding HasIcon}">
-                          <Image Source="{Binding Icon}" Width="26" Height="26" />
-                        </Border>
-                      </Panel>
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                      <TextBlock Classes="name" Text="{Binding Name}" />
-                      <TextBlock Classes="meta" Text="{Binding Subtitle}" />
-                      <Border Classes="badge" IsVisible="{Binding HasUpdate}">
-                        <TextBlock Text="{Binding UpdateText}" />
-                      </Border>
-                    </StackPanel>
-                    <Panel Grid.Column="2" VerticalAlignment="Center">
-                      <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding ShowActions}">
-                        <Button Classes="action update" IsVisible="{Binding ShowUpgrade}" Command="{Binding UpgradeCommand}" ToolTip.Tip="Update">
-                          <StackPanel Orientation="Horizontal" Spacing="5">
-                            <PathIcon Data="{StaticResource IconArrowUp}" />
-                            <TextBlock Text="Update" />
-                          </StackPanel>
-                        </Button>
-                        <Button Classes="action ghost" Padding="0" Width="30" IsVisible="{Binding ShowUninstall}" Command="{Binding RequestUninstallCommand}" ToolTip.Tip="Uninstall">
-                          <PathIcon Data="{StaticResource IconTrash}" />
-                        </Button>
-                      </StackPanel>
-                      <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding IsConfirmingUninstall}">
-                        <Button Classes="action danger" Content="Remove" Command="{Binding ConfirmUninstallCommand}" />
-                        <Button Classes="action" Content="Cancel" Command="{Binding CancelUninstallCommand}" />
-                      </StackPanel>
-                      <ProgressBar IsVisible="{Binding IsWorking}" IsIndeterminate="True" Width="56" Classes="activity" />
-                    </Panel>
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
-
-        </DockPanel>
-
-        <ScrollViewer IsVisible="{Binding IsDiscoverSection}" Padding="10,6,10,6">
-          <ItemsControl ItemsSource="{Binding CatalogResults}">
-            <ItemsControl.ItemTemplate>
-              <DataTemplate x:DataType="vm:CatalogItemViewModel">
-                <Border Classes="row">
-                  <Grid ColumnDefinitions="Auto,*,Auto">
-                    <Border Classes="avatar" Background="{Binding AvatarBrush}">
-                      <TextBlock Text="{Binding Initials}" />
-                    </Border>
-                    <StackPanel Grid.Column="1" Margin="12,0,8,0" VerticalAlignment="Center">
-                      <TextBlock Classes="name" Text="{Binding Name}" />
-                      <TextBlock Classes="meta" Text="{Binding Subtitle}" />
-                    </StackPanel>
-                    <Panel Grid.Column="2" VerticalAlignment="Center">
-                      <Button Classes="action primary" IsVisible="{Binding ShowInstall}" Command="{Binding InstallCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="5">
-                          <PathIcon Data="{StaticResource IconDownload}" />
-                          <TextBlock Text="Install" />
-                        </StackPanel>
-                      </Button>
-                      <StackPanel Orientation="Horizontal" Spacing="5" IsVisible="{Binding IsInstalled}" Margin="0,0,6,0">
-                        <PathIcon Data="{StaticResource IconCheck}" Width="13" Height="13" Foreground="{StaticResource SuccessBrush}" />
-                        <TextBlock Text="Installed" FontSize="12" Foreground="{StaticResource SuccessBrush}" VerticalAlignment="Center" />
-                      </StackPanel>
-                      <ProgressBar IsVisible="{Binding IsWorking}" IsIndeterminate="True" Width="56" Classes="activity" />
-                    </Panel>
-                  </Grid>
-                </Border>
-              </DataTemplate>
-            </ItemsControl.ItemTemplate>
-          </ItemsControl>
-        </ScrollViewer>
-
-        <StackPanel IsVisible="{Binding IsEmpty}" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="10" Margin="32">
-          <PathIcon Data="{StaticResource IconSparkle}" Width="28" Height="28" Foreground="{StaticResource AccentStart}" />
-          <TextBlock Text="{Binding EmptyMessage}" TextAlignment="Center" TextWrapping="Wrap" Classes="caption" />
-        </StackPanel>
+          </StackPanel>
+        </Grid>
       </Panel>
 
       <!-- Status bar -->
-      <Border Grid.Row="5" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="18,10">
+      <Border Grid.Row="3" BorderBrush="{StaticResource StrokeBrush}" BorderThickness="0,1,0,0" Padding="18,10">
         <Grid ColumnDefinitions="*,Auto">
           <TextBlock Classes="caption" Text="{Binding StatusMessage}" TextTrimming="CharacterEllipsis"
                      Classes.error="{Binding StatusIsError}" />
@@ -193,7 +441,7 @@
   </Border>
 
   <Window.Styles>
-    <Style Selector="TextBlock.caption.error">
+    <Style Selector="TextBlock.caption.error, TextBlock.hint.error">
       <Setter Property="Foreground" Value="{StaticResource DangerBrush}" />
     </Style>
   </Window.Styles>

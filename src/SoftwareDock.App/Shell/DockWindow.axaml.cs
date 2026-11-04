@@ -18,6 +18,7 @@ public partial class DockWindow : Window
     private readonly DockViewModel _viewModel;
     private readonly DockOptions _options;
     private PixelPoint? _floatingPosition;
+    private int _autoHideSuspensions;
 
     public DockWindow()
         : this(null!, Options.Create(new DockOptions()))
@@ -55,9 +56,25 @@ public partial class DockWindow : Window
         };
         Deactivated += (_, _) =>
         {
-            if (_viewModel?.IsPinned == true)
+            if (_viewModel?.IsPinned == true && _autoHideSuspensions == 0)
             {
                 Hide();
+            }
+        };
+
+        // CPU and memory are sampled only while someone can see them.
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == IsVisibleProperty && _viewModel is not null)
+            {
+                if (IsVisible)
+                {
+                    _viewModel.StartMonitoring();
+                }
+                else
+                {
+                    _viewModel.StopMonitoring();
+                }
             }
         };
     }
@@ -69,6 +86,16 @@ public partial class DockWindow : Window
         Activate();
         this.FindControl<TextBox>("SearchBox")?.Focus();
         _ = _viewModel.LoadAsync();
+    }
+
+    /// <summary>
+    /// Keeps the anchored panel open while a file picker or another owned dialog has the focus.
+    /// Dispose the returned token when the dialog closes.
+    /// </summary>
+    public IDisposable SuspendAutoHide()
+    {
+        _autoHideSuspensions++;
+        return new AutoHideSuspension(this);
     }
 
     public void ToggleDock()
@@ -140,6 +167,21 @@ public partial class DockWindow : Window
         if (_viewModel?.IsPinned == false && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             BeginMoveDrag(e);
+        }
+    }
+
+    private sealed class AutoHideSuspension(DockWindow window) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                window._autoHideSuspensions--;
+                window.Activate();
+            }
         }
     }
 }

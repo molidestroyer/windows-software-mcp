@@ -1,8 +1,11 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using SoftwareDock.App.Demo;
 using SoftwareDock.App.Platform;
+using SoftwareDock.App.Services;
+using SoftwareDock.App.Settings;
 using SoftwareDock.App.Shell;
 using SoftwareDock.App.ViewModels;
 using SoftwareDock.Application;
@@ -45,13 +48,21 @@ public static class AppHost
             services.AddSoftwareDockDemoAdapters();
             services.AddSingleton<IIconProvider, InitialsOnlyIconProvider>();
             services.AddSingleton<IStartupRegistration, UnsupportedStartupRegistration>();
+            services.TryAddSingleton<IUserSettingsStore>(new InMemoryUserSettingsStore(new UserSettings { AutomaticBackup = false }));
+            services.AddSingleton<IAppUpdater, NoAppUpdater>();
         }
         else
         {
             services.AddSoftwareDockWindowsInfrastructure();
             services.AddSingleton<IIconProvider, ShellIconProvider>();
             services.AddSingleton<IStartupRegistration, RunKeyStartupRegistration>();
+            services.TryAddSingleton<IUserSettingsStore, JsonFileUserSettingsStore>();
+            services.AddSingleton<IAppUpdater, VelopackAppUpdater>();
         }
+
+        services.AddSingleton<AutoBackup>();
+        services.TryAddSingleton<IShellServices>(sp => new AvaloniaShellServices(new Lazy<DockWindow>(sp.GetRequiredService<DockWindow>)));
+        services.AddSingleton<SettingsViewModel>();
 
         services.AddSingleton<DockViewModel>();
         services.AddSingleton<DockWindow>();

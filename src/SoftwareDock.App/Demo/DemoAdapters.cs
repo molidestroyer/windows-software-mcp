@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SoftwareDock.Application.Abstractions;
 using SoftwareDock.Domain.Applications;
+using SoftwareDock.Domain.Monitoring;
 using SoftwareDock.Domain.Operations;
 using SoftwareDock.Domain.Packages;
 
@@ -19,12 +20,13 @@ public static class DemoAdapters
         services.TryAddSingleton<IInstalledApplicationSource>(sp => sp.GetRequiredService<DemoMachine>());
         services.TryAddSingleton<IPackageManager>(sp => sp.GetRequiredService<DemoMachine>());
         services.TryAddSingleton<IUninstallerLauncher>(sp => sp.GetRequiredService<DemoMachine>());
+        services.TryAddSingleton<ISystemMonitor>(sp => sp.GetRequiredService<DemoMachine>());
         return services;
     }
 }
 
 /// <summary>A pretend PC whose state changes as operations run.</summary>
-public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher
+public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher, ISystemMonitor
 {
     private static readonly (string Name, string Id, string Publisher, string Version, string? Available, string? Source)[] Seed =
     [
@@ -67,7 +69,19 @@ public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, 
         new("ShareX", PackageId.Parse("ShareX.ShareX"), "17.0.0", "winget"),
     ];
 
+    // What "runs" on the demo PC: executable, cores kept busy, working set.
+    private static readonly (string App, string Exe, double Cores, long Memory)[] Running =
+    [
+        ("Google.Chrome", "chrome.exe", 0.9, 1_850L << 20),
+        ("Microsoft.VisualStudioCode", "Code.exe", 0.35, 920L << 20),
+        ("Docker.DockerDesktop", "Docker Desktop.exe", 0.6, 1_400L << 20),
+        ("Spotify.Spotify", "Spotify.exe", 0.08, 310L << 20),
+        ("SlackTechnologies.Slack", "slack.exe", 0.05, 480L << 20),
+        ("Ollama.Ollama", "ollama.exe", 1.6, 4_200L << 20),
+    ];
+
     private readonly Lock _lock = new();
+    private readonly System.Diagnostics.Stopwatch _uptime = System.Diagnostics.Stopwatch.StartNew();
     private readonly List<InstalledPackage> _installed;
     private readonly TimeSpan _stepDelay;
 
@@ -97,6 +111,7 @@ public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, 
                 Scope = InstallScope.Machine,
                 Version = p.Version,
                 Publisher = Seed.FirstOrDefault(s => s.Id == p.Id.Value).Publisher ?? "Demo publisher",
+                InstallLocation = InstallFolder(p.Id.Value),
                 EstimatedSizeBytes = 1024L * 1024 * (40 + (p.Name.Length * 13 % 400)),
                 InstallDate = new DateOnly(2026, 1 + (p.Name.Length % 10), 1 + (p.Name.Length % 27)),
             }).ToList();
@@ -169,6 +184,27 @@ public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, 
 
     public Task<OperationResult> RunAsync(UninstallCommand command, bool silent, CancellationToken cancellationToken) =>
         Task.FromResult(OperationResult.Success("The uninstaller finished."));
+
+    public int ProcessorCount => 8;
+
+    public IReadOnlyList<ProcessSample> GetProcesses()
+    {
+        // CPU time grows with wall-clock time, so the reported % does not depend on how often it is sampled.
+        var seconds = _uptime.Elapsed.TotalSeconds;
+        lock (_lock)
+        {
+            var installed = _installed.Select(p => p.Id.Value).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            return Running
+                .Where(r => installed.Contains(r.App))
+                .Select((r, i) => new ProcessSample(1000 + i, $@"{InstallFolder(r.App)}\{r.Exe}", TimeSpan.FromSeconds(r.Cores * seconds), r.Memory))
+                .Append(new ProcessSample(4000, @"C:\Windows\explorer.exe", TimeSpan.FromSeconds(0.4 * seconds), 180L << 20))
+                .ToList();
+        }
+    }
+
+    public MemoryStatus GetMemoryStatus() => new(32L << 30, 17L << 30);
+
+    private static string InstallFolder(string id) => $@"C:\Program Files\{id}";
 
     private async Task SimulateAsync(IProgress<string>? progress, CancellationToken cancellationToken, params string[] steps)
     {

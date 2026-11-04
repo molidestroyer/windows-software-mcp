@@ -5,11 +5,16 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using Microsoft.Extensions.Logging;
+using SoftwareDock.Domain.Applications;
 using AvaloniaBitmap = Avalonia.Media.Imaging.Bitmap;
 
 namespace SoftwareDock.App.Platform;
 
-/// <summary>Extracts application icons from <c>.exe</c>/<c>.dll</c>/<c>.ico</c> files, once per path.</summary>
+/// <summary>
+/// Extracts application icons from <c>.exe</c>/<c>.dll</c>/<c>.ico</c> files, once per application.
+/// Uses the registered <c>DisplayIcon</c> when it points at a file that exists, otherwise the most
+/// plausible executable in the install folder (<see cref="IconLocator"/>).
+/// </summary>
 [SupportedOSPlatform("windows")]
 public sealed partial class ShellIconProvider(ILogger<ShellIconProvider> logger) : IIconProvider, IDisposable
 {
@@ -17,14 +22,10 @@ public sealed partial class ShellIconProvider(ILogger<ShellIconProvider> logger)
     private readonly SemaphoreSlim _throttle = new(4, 4);
     private readonly ConcurrentDictionary<string, Task<AvaloniaBitmap?>> _cache = new(StringComparer.OrdinalIgnoreCase);
 
-    public Task<AvaloniaBitmap?> GetIconAsync(string? displayIcon, CancellationToken cancellationToken)
+    public Task<AvaloniaBitmap?> GetIconAsync(InstalledApplication application, CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(displayIcon))
-        {
-            return Task.FromResult<AvaloniaBitmap?>(null);
-        }
-
-        return _cache.GetOrAdd(displayIcon, key => LoadAsync(key, cancellationToken));
+        ArgumentNullException.ThrowIfNull(application);
+        return _cache.GetOrAdd(application.Key.Value, _ => LoadAsync(application, cancellationToken));
     }
 
     public void Dispose() => _throttle.Dispose();
@@ -44,12 +45,15 @@ public sealed partial class ShellIconProvider(ILogger<ShellIconProvider> logger)
         return (text.Trim().Trim('"'), index);
     }
 
-    private async Task<AvaloniaBitmap?> LoadAsync(string displayIcon, CancellationToken cancellationToken)
+    private async Task<AvaloniaBitmap?> LoadAsync(InstalledApplication application, CancellationToken cancellationToken)
     {
+        var displayIcon = application.IconPath ?? application.Name;
         await _throttle.WaitAsync(cancellationToken);
         try
         {
-            return await Task.Run(() => Extract(displayIcon), cancellationToken);
+            return await Task.Run(
+                () => Resolve(application) is { } source ? Extract(source) : null,
+                cancellationToken);
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or ExternalException or UnauthorizedAccessException)
         {
@@ -60,6 +64,27 @@ public sealed partial class ShellIconProvider(ILogger<ShellIconProvider> logger)
         {
             _throttle.Release();
         }
+    }
+
+    private static string? Resolve(InstalledApplication application)
+    {
+        if (application.IconPath is { } registered && File.Exists(ParseDisplayIcon(registered).Path))
+        {
+            return registered;
+        }
+
+        var folder = application.InstallLocation?.Trim().Trim('"');
+        if (string.IsNullOrEmpty(folder) || !Directory.Exists(folder))
+        {
+            return null;
+        }
+
+        var executables = Directory.EnumerateFiles(folder, "*.exe", SearchOption.TopDirectoryOnly)
+            .Concat(Directory.Exists(Path.Combine(folder, "bin")) ? Directory.EnumerateFiles(Path.Combine(folder, "bin"), "*.exe") : [])
+            .Select(f => new FileInfo(f))
+            .ToList();
+        var chosen = IconLocator.Choose(application.Name, executables.Select(f => (f.Name, f.Length)));
+        return chosen is null ? null : executables.First(f => f.Name == chosen).FullName;
     }
 
     private static AvaloniaBitmap? Extract(string displayIcon)

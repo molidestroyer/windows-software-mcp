@@ -28,6 +28,7 @@
     <PackageReference Include="CommunityToolkit.Mvvm" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
     <PackageReference Include="System.Drawing.Common" />
+    <PackageReference Include="Velopack" />
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="SoftwareDock.App.Tests" />

@@ -11,6 +11,10 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
+        // Must run first: during install, update and uninstall Velopack starts the app with hook
+        // arguments, and this handles them and exits before any window exists.
+        Velopack.VelopackApp.Build().Run();
+
         using var instance = SingleInstance.TryAcquire();
         if (instance is null)
         {

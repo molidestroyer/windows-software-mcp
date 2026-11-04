@@ -5,6 +5,8 @@ using Avalonia.Platform;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SoftwareDock.App.Platform;
+using SoftwareDock.App.Services;
+using SoftwareDock.App.Settings;
 using SoftwareDock.App.ViewModels;
 
 namespace SoftwareDock.App.Shell;
@@ -24,7 +26,11 @@ public sealed partial class DockShell : IDisposable
     private readonly IStartupRegistration _startup;
     private readonly DockOptions _options;
     private readonly ILogger<DockShell> _logger;
+    private readonly IUserSettingsStore _settings;
+    private readonly IAppUpdater _updater;
+    private readonly AutoBackup _autoBackup;
     private readonly Dictionary<string, WindowIcon> _icons = [];
+    private readonly CancellationTokenSource _lifetime = new();
 
     private TrayIcon? _tray;
     private IDisposable? _hotkey;
@@ -33,6 +39,9 @@ public sealed partial class DockShell : IDisposable
         DockWindow window,
         DockViewModel viewModel,
         IStartupRegistration startup,
+        IUserSettingsStore settings,
+        IAppUpdater updater,
+        AutoBackup autoBackup,
         IOptions<DockOptions> options,
         ILogger<DockShell> logger)
     {
@@ -40,6 +49,9 @@ public sealed partial class DockShell : IDisposable
         _window = window;
         _viewModel = viewModel;
         _startup = startup;
+        _settings = settings;
+        _updater = updater;
+        _autoBackup = autoBackup; // Held so it lives (and keeps listening for inventory changes) as long as the shell.
         _options = options.Value;
         _logger = logger;
     }
@@ -58,8 +70,10 @@ public sealed partial class DockShell : IDisposable
         _viewModel.PropertyChanged += (_, _) => UpdateTrayState();
         RegisterHotkey();
 
-        // Warm the cache in the background so the first open is instant.
+        // Warm the cache in the background so the first open is instant (and the backup current).
         _ = _viewModel.LoadAsync();
+        _ = CheckSoftwareUpdatesPeriodicallyAsync(_lifetime.Token);
+        _ = CheckAppUpdatesPeriodicallyAsync(_lifetime.Token);
 
         if (showPanel)
         {
@@ -71,6 +85,8 @@ public sealed partial class DockShell : IDisposable
 
     public void Dispose()
     {
+        _lifetime.Cancel();
+        _lifetime.Dispose();
         _hotkey?.Dispose();
         _tray?.Dispose();
         foreach (var icon in _icons.Values)
@@ -109,6 +125,13 @@ public sealed partial class DockShell : IDisposable
             startWithWindows.IsChecked = _startup.IsEnabled;
         };
 
+        var settings = new NativeMenuItem("Settings…");
+        settings.Click += (_, _) =>
+        {
+            _viewModel.Page = ViewModels.DockPage.Settings;
+            _window.ShowDock();
+        };
+
         var exit = new NativeMenuItem("Exit");
         exit.Click += (_, _) =>
         {
@@ -126,9 +149,70 @@ public sealed partial class DockShell : IDisposable
             copyMcp,
             new NativeMenuItemSeparator(),
             startWithWindows,
+            settings,
             new NativeMenuItemSeparator(),
             exit,
         ];
+    }
+
+    /// <summary>
+    /// Rebuilds the inventory every few hours so the tray turns amber when updates appear, without
+    /// anyone opening the panel. Skipped while the panel is open: it refreshes on its own then.
+    /// </summary>
+    private async Task CheckSoftwareUpdatesPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var hours = Math.Max(1, _settings.Current.SoftwareUpdateCheckHours);
+                await Task.Delay(TimeSpan.FromHours(hours), cancellationToken);
+                if (_settings.Current.CheckForSoftwareUpdates && !_window.IsVisible)
+                {
+                    await _viewModel.LoadAsync(forceRefresh: true);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    /// <summary>Checks GitHub for a new dock release shortly after start and then twice a day.</summary>
+    private async Task CheckAppUpdatesPeriodicallyAsync(CancellationToken cancellationToken)
+    {
+        if (!_updater.IsSupported)
+        {
+            return;
+        }
+
+        try
+        {
+            await Task.Delay(TimeSpan.FromMinutes(1), cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (_settings.Current.AutoUpdateApp)
+                {
+                    try
+                    {
+                        if (await _updater.CheckAsync(cancellationToken) is { } update)
+                        {
+                            await _updater.DownloadAsync(update, null, cancellationToken);
+                            _viewModel.OfferAppUpdate(update);
+                        }
+                    }
+                    catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidOperationException)
+                    {
+                        LogAppUpdateFailed(ex);
+                    }
+                }
+
+                await Task.Delay(TimeSpan.FromHours(12), cancellationToken);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private void RegisterHotkey()
@@ -182,6 +266,9 @@ public sealed partial class DockShell : IDisposable
 
     // Shell_NotifyIcon truncates tooltips at 128 characters.
     private static string Truncate(string text, int length) => text.Length <= length ? text : text[..(length - 1)] + "…";
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Checking for a new Software Dock release failed")]
+    private partial void LogAppUpdateFailed(Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "The hotkey {Hotkey} is taken by another application; open the dock from the tray instead")]
     private partial void LogHotkeyTaken(string hotkey);
