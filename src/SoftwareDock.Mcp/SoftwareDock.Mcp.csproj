@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>SoftwareDock.Mcp</RootNamespace>
+    <AssemblyName>SoftwareDock.Mcp</AssemblyName>
+    <Description>Model Context Protocol server (stdio) exposing the software inventory and install/upgrade/uninstall to AI agents.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SoftwareDock.Infrastructure\SoftwareDock.Infrastructure.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="ModelContextProtocol" />
+  </ItemGroup>
+</Project>
