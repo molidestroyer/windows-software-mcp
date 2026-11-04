@@ -22,6 +22,11 @@ internal static class ServerInstructions
         - "Install X" → search_software_catalog, pick the result whose publisher/name clearly match
           (ask the user when several plausible ones exist), then install_software.
         - "Remove X" → list_installed_software with a filter, then uninstall_software with its key.
+          To remove several, call uninstall_software once per key, one after another.
+        - "What is eating my memory / CPU?" → list_running_software.
+        - "Back up my software" / "I'm reinstalling Windows" → export_software_backup. The 'winget'
+          format restores with `winget import -i file.json`; to restore with this server, read the
+          backup and call install_software for each packageId the user wants.
 
         Rules:
         - Install, upgrade and uninstall change the user's machine. State exactly what you are about

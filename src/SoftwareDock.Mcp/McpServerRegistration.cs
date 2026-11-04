@@ -28,7 +28,8 @@ public static class McpServerRegistration
                     ? ServerInstructions.Text + "\nThis server runs in read-only mode: install, upgrade and uninstall are not available."
                     : ServerInstructions.Text;
             })
-            .WithTools<SoftwareInventoryTools>();
+            .WithTools<SoftwareInventoryTools>()
+            .WithTools<SoftwareInsightTools>();
 
         return readOnly ? builder : builder.WithTools<SoftwareChangeTools>();
     }

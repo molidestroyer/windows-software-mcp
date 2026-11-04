@@ -41,6 +41,7 @@ internal sealed class McpServerFixture : IAsyncDisposable
         builder.Services.AddSingleton<IInstalledApplicationSource>(machine);
         builder.Services.AddSingleton<IPackageManager>(machine);
         builder.Services.AddSingleton<IUninstallerLauncher>(machine);
+        builder.Services.AddSingleton<ISystemMonitor>(machine);
         builder.Services.AddSoftwareDockApplication();
         builder.Services
             .AddSoftwareDockMcpServer(readOnly)
@@ -68,8 +69,18 @@ internal sealed class McpServerFixture : IAsyncDisposable
     }
 }
 
-internal sealed class FakeMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher
+internal sealed class FakeMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher, ISystemMonitor
 {
+    private int _ticks;
+
+    public int ProcessorCount => 4;
+
+    /// <summary>Git's bash.exe gains 0.4 s of CPU per sample.</summary>
+    public IReadOnlyList<Domain.Monitoring.ProcessSample> GetProcesses() =>
+        [new(42, @"C:\Program Files\Git\bin\bash.exe", TimeSpan.FromSeconds(0.4 * ++_ticks), 64L << 20)];
+
+    public Domain.Monitoring.MemoryStatus GetMemoryStatus() => new(16L << 30, 6L << 30);
+
     public static readonly ApplicationKey GitKey = ApplicationKey.ForRegistry(InstallScope.Machine, RegistryView.Native64, "Git_is1");
 
     public List<string> Calls { get; } = [];
@@ -79,7 +90,7 @@ internal sealed class FakeMachine : IInstalledApplicationSource, IPackageManager
         UninstallCommand.TryParse(@"""C:\Program Files\Git\unins000.exe""", out var uninstall);
         IReadOnlyList<InstalledApplication> apps =
         [
-            new() { Key = GitKey, Name = "Git", Publisher = "The Git Development Community", Version = "2.45.0", Origin = ApplicationOrigin.Registry, Scope = InstallScope.Machine, Uninstall = uninstall },
+            new() { Key = GitKey, Name = "Git", Publisher = "The Git Development Community", Version = "2.45.0", Origin = ApplicationOrigin.Registry, Scope = InstallScope.Machine, Uninstall = uninstall, InstallLocation = @"C:\Program Files\Git" },
         ];
         return Task.FromResult(apps);
     }

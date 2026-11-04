@@ -7,8 +7,8 @@ public class McpServerTests
 {
     private static readonly string[] AllTools =
     [
-        "get_software_details", "install_software", "list_installed_software",
-        "search_software_catalog", "uninstall_software", "upgrade_software",
+        "export_software_backup", "get_software_details", "install_software", "list_installed_software",
+        "list_running_software", "search_software_catalog", "uninstall_software", "upgrade_software",
     ];
 
     [Fact]
@@ -43,7 +43,9 @@ public class McpServerTests
 
         var tools = await server.Client.ListToolsAsync(cancellationToken: CancellationToken.None);
 
-        Assert.Equal(["get_software_details", "list_installed_software", "search_software_catalog"], tools.Select(t => t.Name).Order(StringComparer.Ordinal));
+        Assert.Equal(
+            ["export_software_backup", "get_software_details", "list_installed_software", "list_running_software", "search_software_catalog"],
+            tools.Select(t => t.Name).Order(StringComparer.Ordinal));
         Assert.Contains("read-only", server.Client.ServerInstructions, StringComparison.Ordinal);
     }
 
@@ -111,6 +113,35 @@ public class McpServerTests
 
         Assert.True(result.IsError);
         Assert.Contains("list_installed_software", Text(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ListRunningSoftware_ReportsCpuAndMemoryPerApplication()
+    {
+        await using var server = await McpServerFixture.StartAsync();
+
+        var result = await server.CallAsync("list_running_software", new() { ["sortBy"] = "cpu" });
+
+        using var json = JsonDocument.Parse(Text(result));
+        var git = json.RootElement.GetProperty("items")[0];
+        Assert.Equal("Git", git.GetProperty("name").GetString());
+        Assert.Equal(64, git.GetProperty("memoryMb").GetInt64());
+        Assert.True(git.GetProperty("cpuPercent").GetDouble() > 0);
+        Assert.Equal(16384, json.RootElement.GetProperty("memoryTotalMb").GetInt64());
+    }
+
+    [Theory]
+    [InlineData("winget", "Microsoft.Winget.Source_8wekyb3d8bbwe")]
+    [InlineData("softwaredock", "software-dock-backup")]
+    public async Task ExportSoftwareBackup_ReturnsARestorableFile(string format, string marker)
+    {
+        await using var server = await McpServerFixture.StartAsync();
+
+        var result = await server.CallAsync("export_software_backup", new() { ["format"] = format });
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.Contains(marker, Text(result), StringComparison.Ordinal);
+        Assert.Contains("Git.Git", Text(result), StringComparison.Ordinal);
     }
 
     [Fact]
