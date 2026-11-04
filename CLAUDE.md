@@ -35,7 +35,7 @@ on Windows.
   Widths are terminal cells (CJK = 2).
 - **Ids are validated in the domain** (`PackageId`): no leading `-`, no quotes, no control chars.
   WinGet arguments always go through `ArgumentList` and named options (`--id`, `--query`).
-- **Never guess silent switches** for EXE uninstallers. Silent = package manager, MSI `/qn`, or
+- **Never guess silent switches** for EXE uninstallers. Silent = package manager, MSI `/passive`, or
   `QuietUninstallString`; otherwise interactive.
 - **MSI `/I` is rewritten to `/X`** — `/I` opens the repair dialog.
 - **Use cases are singletons** shared by UI and MCP: one cache, one operation queue.
@@ -59,7 +59,12 @@ on Windows.
 - **Startup changes go through `StartupApproved`**, never by deleting Run values or shortcuts.
 - **Security alerts only for apps with an update pending**; KEV names products, not versions. Keep
   the matching strict and the wording "exploited", never "vulnerable".
-- **Leftovers go to the Recycle Bin** and are offered only for apps no longer in the inventory.
+- **Leftovers go to the Recycle Bin** (with `FOF_WANTNUKEWARNING`, so nothing is destroyed silently)
+  and are offered only for apps no longer in the inventory. **Installed apps veto candidates**: no
+  candidate may equal, contain or sit inside an installed app's folder, and name-based candidates
+  are dropped when an installed app shares the cleaned name (two Pythons, VC++ x86/x64).
+- **"Unused" never fires on apps in use**: running, enabled at startup, or part of Windows
+  (`UnusedApplications`). UserAssist only sees Explorer launches.
 - **Pins/skips are dock preferences** (`UserSettings.UpdateRules`): excluded from Update all, the
   schedule and notifications; the MCP server still reports raw updates.
 - **Notifications announce each version once** (`UpdateAnnouncer`, `AnnouncedUpdates`).
