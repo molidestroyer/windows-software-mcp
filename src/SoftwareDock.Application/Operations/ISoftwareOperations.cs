@@ -19,6 +19,16 @@ public interface ISoftwareOperations
     Task<OperationResult> UpgradeAsync(ApplicationKey key, IProgress<string>? progress, CancellationToken cancellationToken);
 
     Task<OperationResult> UninstallAsync(ApplicationKey key, UninstallMode mode, IProgress<string>? progress, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Removes several applications, one after another — something Windows itself cannot do.
+    /// A failure moves on to the next item; a cancellation (the user dismissed a UAC prompt or an
+    /// uninstaller) stops the batch, because that is how people say "stop".
+    /// </summary>
+    Task<BatchResult> UninstallManyAsync(IReadOnlyList<ApplicationKey> keys, UninstallMode mode, IProgress<BatchProgress>? progress, CancellationToken cancellationToken);
+
+    /// <summary>Installs several packages one after another, with the same failure rules as <see cref="UninstallManyAsync"/>.</summary>
+    Task<BatchResult> InstallManyAsync(IReadOnlyList<InstallRequest> requests, IProgress<BatchProgress>? progress, CancellationToken cancellationToken);
 }
 
 public sealed class OperationCompletedEventArgs(string description, OperationResult result) : EventArgs

@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using SoftwareDock.Application.Backup;
 using SoftwareDock.Application.Inventory;
+using SoftwareDock.Application.Monitoring;
 using SoftwareDock.Application.Operations;
 
 namespace SoftwareDock.Application;
@@ -17,6 +19,10 @@ public static class DependencyInjection
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ISoftwareInventory, SoftwareInventory>();
         services.TryAddSingleton<ISoftwareOperations, SoftwareOperations>();
+        services.TryAddSingleton<SoftwareBackup>();
+
+        // Needs an ISystemMonitor; front ends that never show resource usage simply never resolve it.
+        services.TryAddSingleton<ResourceMonitor>();
         return services;
     }
 }

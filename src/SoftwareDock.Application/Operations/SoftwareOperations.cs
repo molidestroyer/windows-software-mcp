@@ -74,11 +74,54 @@ public sealed partial class SoftwareOperations : ISoftwareOperations, IDisposabl
     {
         ArgumentNullException.ThrowIfNull(key);
         var application = await _inventory.FindAsync(key, cancellationToken);
-        if (application is null)
-        {
-            return NotInstalled(key);
-        }
+        return application is null
+            ? NotInstalled(key)
+            : await UninstallAsync(application, mode, progress, cancellationToken);
+    }
 
+    public async Task<BatchResult> UninstallManyAsync(
+        IReadOnlyList<ApplicationKey> keys,
+        UninstallMode mode,
+        IProgress<BatchProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+
+        // Resolve everything from one snapshot: each removal invalidates the inventory, and
+        // rebuilding it between items would cost a full WinGet listing per application.
+        var snapshot = await _inventory.GetSnapshotAsync(forceRefresh: false, cancellationToken);
+        var items = keys.Distinct().Select(k => (Key: k, App: snapshot.Find(k))).ToList();
+
+        return await RunBatchAsync(
+            items,
+            i => i.App?.Name ?? i.Key.Value,
+            (i, lines, ct) => i.App is null ? Task.FromResult(NotInstalled(i.Key)) : UninstallAsync(i.App, mode, lines, ct),
+            progress,
+            cancellationToken);
+    }
+
+    public Task<BatchResult> InstallManyAsync(
+        IReadOnlyList<InstallRequest> requests,
+        IProgress<BatchProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(requests);
+        return RunBatchAsync(
+            requests.DistinctBy(r => r.Id).ToList(),
+            r => r.Id.Value,
+            (r, lines, ct) => InstallAsync(r, lines, ct),
+            progress,
+            cancellationToken);
+    }
+
+    public void Dispose() => _queue.Dispose();
+
+    private async Task<OperationResult> UninstallAsync(
+        InstalledApplication application,
+        UninstallMode mode,
+        IProgress<string>? progress,
+        CancellationToken cancellationToken)
+    {
         var plan = UninstallPlan.For(application, mode);
         if (plan is null)
         {
@@ -96,7 +139,53 @@ public sealed partial class SoftwareOperations : ISoftwareOperations, IDisposabl
             cancellationToken);
     }
 
-    public void Dispose() => _queue.Dispose();
+    private static async Task<BatchResult> RunBatchAsync<TItem>(
+        IReadOnlyList<TItem> items,
+        Func<TItem, string> nameOf,
+        Func<TItem, IProgress<string>, CancellationToken, Task<OperationResult>> run,
+        IProgress<BatchProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<BatchItemResult>(items.Count);
+        var stopped = false;
+        for (var i = 0; i < items.Count; i++)
+        {
+            var name = nameOf(items[i]);
+            if (stopped || cancellationToken.IsCancellationRequested)
+            {
+                results.Add(new BatchItemResult(name, null));
+                continue;
+            }
+
+            var position = i + 1;
+            progress?.Report(new BatchProgress(position, items.Count, name));
+            var lines = new Progress<string>(line => progress?.Report(new BatchProgress(position, items.Count, name, line)));
+
+            OperationResult result;
+            try
+            {
+                result = await run(items[i], lines, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                results.Add(new BatchItemResult(name, null));
+                stopped = true;
+                continue;
+            }
+            catch (PackageManagerUnavailableException ex)
+            {
+                // Every remaining item would fail the same way.
+                results.Add(new BatchItemResult(name, OperationResult.Failure(ex.Message)));
+                stopped = true;
+                continue;
+            }
+
+            results.Add(new BatchItemResult(name, result));
+            stopped = result.Status == OperationStatus.Cancelled;
+        }
+
+        return new BatchResult(results);
+    }
 
     private async Task<OperationResult> RunExclusiveAsync(
         string description,
