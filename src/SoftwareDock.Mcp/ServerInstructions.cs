@@ -24,6 +24,11 @@ internal static class ServerInstructions
         - "Remove X" → list_installed_software with a filter, then uninstall_software with its key.
           To remove several, call uninstall_software once per key, one after another.
         - "What is eating my memory / CPU?" → list_running_software.
+        - "Is anything on my PC under attack / what should I update first?" → get_security_advisories,
+          then upgrade_software for each key.
+        - "What can I uninstall?" → list_unused_software (apps not opened in months, largest first).
+        - "Why is my PC slow to start?" → list_startup_apps; set_startup_app_enabled turns one off
+          the same way Task Manager does (nothing is deleted). Ids come from list_startup_apps.
         - "Back up my software" / "I'm reinstalling Windows" → export_software_backup. The 'winget'
           format restores with `winget import -i file.json`; to restore with this server, read the
           backup and call install_software for each packageId the user wants.

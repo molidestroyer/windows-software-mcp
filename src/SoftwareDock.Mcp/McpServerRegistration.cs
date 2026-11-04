@@ -29,7 +29,8 @@ public static class McpServerRegistration
                     : ServerInstructions.Text;
             })
             .WithTools<SoftwareInventoryTools>()
-            .WithTools<SoftwareInsightTools>();
+            .WithTools<SoftwareInsightTools>()
+            .WithTools<SoftwareHygieneTools>();
 
         return readOnly ? builder : builder.WithTools<SoftwareChangeTools>();
     }

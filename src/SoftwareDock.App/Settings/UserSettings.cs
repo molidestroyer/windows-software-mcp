@@ -1,3 +1,5 @@
+using SoftwareDock.Domain.Updates;
+
 namespace SoftwareDock.App.Settings;
 
 public enum SortOrder
@@ -6,6 +8,7 @@ public enum SortOrder
     Size,
     RecentlyInstalled,
     MemoryUse,
+    LeastRecentlyUsed,
 }
 
 /// <summary>
@@ -29,8 +32,43 @@ public sealed record UserSettings
 
     public SortOrder SortOrder { get; init; } = SortOrder.Name;
 
+    public bool Notifications { get; init; } = true;
+
+    public bool SecurityAlerts { get; init; } = true;
+
+    public UpdateScheduleMode ScheduledUpdates { get; init; } = UpdateScheduleMode.Off;
+
+    public int ScheduledUpdateHour { get; init; } = 3;
+
+    public DateTime? LastScheduledRun { get; init; }
+
+    /// <summary>Application keys the user pinned to their current version.</summary>
+    public IReadOnlyList<string> PinnedApplications { get; init; } = [];
+
+    /// <summary>Application key → version the user chose to skip.</summary>
+    public IReadOnlyDictionary<string, string> SkippedVersions { get; init; } = new Dictionary<string, string>();
+
+    /// <summary>Application key → version already announced in a notification, so it is announced once.</summary>
+    public IReadOnlyDictionary<string, string> AnnouncedUpdates { get; init; } = new Dictionary<string, string>();
+
     public string EffectiveBackupFolder =>
         string.IsNullOrWhiteSpace(BackupFolder)
             ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "Software Dock")
             : BackupFolder;
+
+    public UpdateRules UpdateRules => new(
+        new HashSet<string>(PinnedApplications.Select(p => p.ToUpperInvariant()), StringComparer.OrdinalIgnoreCase),
+        SkippedVersions.ToDictionary(s => s.Key.ToUpperInvariant(), s => s.Value, StringComparer.OrdinalIgnoreCase));
+
+    public UpdateSchedule Schedule => new(ScheduledUpdates, ScheduledUpdateHour);
+
+    public UserSettings WithRules(UpdateRules rules)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        return this with
+        {
+            PinnedApplications = rules.Pinned.Order(StringComparer.OrdinalIgnoreCase).ToList(),
+            SkippedVersions = rules.SkippedVersions.ToDictionary(s => s.Key, s => s.Value),
+        };
+    }
 }

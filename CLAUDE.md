@@ -21,7 +21,7 @@ on Windows.
 
 | Project | Responsibility |
 | --- | --- |
-| `Domain` | `InstalledApplication`, `ApplicationKey`, `PackageId`, `UninstallCommand`, `InventoryReconciler`. Pure. |
+| `Domain` | `InstalledApplication`, `ApplicationKey`, `PackageId`, `UninstallCommand`, `InventoryReconciler`, `ApplicationRoots`, `StartupApproval`, `UpdateRules`/`UpdateSchedule`, `SecurityAdvisor`, `LeftoverCandidates`. Pure. |
 | `Application` | `SoftwareInventory` (cached snapshot), `SoftwareOperations` (serialized install/upgrade/uninstall), `UninstallPlan`. Ports in `Abstractions/`. |
 | `Infrastructure` | `WinGetPackageManager` + `WinGetTableParser`, `RegistryInstalledApplicationSource`, `ShellUninstallerLauncher`, `ProcessRunner`. |
 | `Mcp` | Tools, `ServerInstructions`, `McpServerRegistration`, `--print-config`, `--read-only`. |
@@ -35,7 +35,7 @@ on Windows.
   Widths are terminal cells (CJK = 2).
 - **Ids are validated in the domain** (`PackageId`): no leading `-`, no quotes, no control chars.
   WinGet arguments always go through `ArgumentList` and named options (`--id`, `--query`).
-- **Never guess silent switches** for EXE uninstallers. Silent = package manager, MSI `/qn`, or
+- **Never guess silent switches** for EXE uninstallers. Silent = package manager, MSI `/passive`, or
   `QuietUninstallString`; otherwise interactive.
 - **MSI `/I` is rewritten to `/X`** — `/I` opens the repair dialog.
 - **Use cases are singletons** shared by UI and MCP: one cache, one operation queue.
@@ -54,15 +54,44 @@ on Windows.
   culture, never hardcode `8.9` (fails on es-ES).
 - **Self-update applies only on *Restart to update*** (checked 1 min after start, then twice a day;
   downloads delta). Manual equivalent: `%LOCALAPPDATA%\SoftwareDock\Update.exe apply -- --background`.
+- **One path → app rule** (`ApplicationRoots`) for processes, startup entries, UserAssist history and
+  leftovers. Never add name-based matching beside it.
+- **Startup changes go through `StartupApproved`**, never by deleting Run values or shortcuts.
+- **Security alerts only for apps with an update pending**; KEV names products, not versions. Keep
+  the matching strict and the wording "exploited", never "vulnerable".
+- **Leftovers go to the Recycle Bin** (with `FOF_WANTNUKEWARNING`, so nothing is destroyed silently)
+  and are offered only for apps no longer in the inventory. **Vetoes**: no candidate may equal,
+  contain or sit inside an installed app's folder, a PATH folder or a running process's folder;
+  name-based candidates are dropped when an installed app shares the cleaned name (two Pythons,
+  VC++ x86/x64) and when they contain the app's own install folder (`%LOCALAPPDATA%\Python`).
+  `RecycleAsync` re-checks PATH and running processes right before recycling.
+- **"Unused" never fires on apps in use**: running, enabled at startup, or part of Windows
+  (`UnusedApplications`). UserAssist only sees Explorer launches.
+- **Pins/skips are dock preferences** (`UserSettings.UpdateRules`): excluded from Update all, the
+  schedule and notifications; the MCP server still reports raw updates.
+- **Notifications announce each version once** (`UpdateAnnouncer`, `AnnouncedUpdates`).
+- **The app targets `net10.0-windows10.0.19041.0`** (toasts); tests for it target the same TFM.
 - **Anchored panel + dialogs:** wrap any picker/dialog in `DockWindow.SuspendAutoHide()`, or the
   panel hides when the dialog takes focus.
+
+## Testing on a real PC (QA) — non-negotiable
+
+- **Never delete, recycle or move anything that already exists on the machine.** Leftover cleanup is
+  verified with `FindAsync` only (a dry run that lists folders); `RecycleAsync`/*Clean up* is run
+  only on folders the test itself created under `%TEMP%`. The user's Python, its packages and the
+  Python Install Manager are the canonical example of what must survive.
+- Uninstall only dedicated throwaway apps installed for the test (Everything, WinDirStat, TreeSize
+  Free). Anything else needs the user's explicit OK first.
+- Do not run *Scheduled updates* or *Update all* against the real machine without the user's OK:
+  they really update every app. Use `--demo` (settings in memory, toasts recorded) for UI checks.
+- Unit and integration tests never touch real user folders: fakes, `--demo`, or `Path.GetTempPath()`.
 
 ## Known limits
 
 - Inno Setup / some NSIS uninstallers relaunch from `%TEMP%` and exit at once; the inventory may
   still list the app until the next refresh.
-- Silent uninstall of a per-machine MSI from a non-elevated dock fails with 1603 (same with plain
-  `winget uninstall --silent`): quiet MSI cannot raise UAC. Interactive mode or an elevated shell works.
+- Silent uninstall of a per-machine MSI uses `msiexec /X… /passive` (fixed in 0.3.0): `/qn`, and so
+  `winget uninstall --silent`, cannot raise UAC and fails with 1603 from a non-elevated process.
 - Some Inno uninstallers run via WinGet's `/SILENT` take minutes (TreeSize Free: 6.5 min); the MCP
   call blocks meanwhile.
 - WinGet truncates long ids in its tables; such apps fall back to their registered uninstaller

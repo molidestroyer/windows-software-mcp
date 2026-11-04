@@ -15,6 +15,9 @@ internal enum UninstallKind
 /// <remarks>
 /// Preference order:
 /// <list type="number">
+///   <item>Silent removal of a per-machine Windows Installer package: msiexec <c>/passive</c>.
+///         WinGet's <c>--silent</c> runs it with <c>/qn</c>, which cannot raise a UAC prompt and
+///         fails with 1603 from a non-elevated dock (found in the 0.2.0 Windows smoke test).</item>
 ///   <item>The package manager, whenever it has a usable id: it knows each installer's silent
 ///         switches and records the removal.</item>
 ///   <item>Silent mode: <c>QuietUninstallString</c>, then an MSI product code (<c>/qn</c>).</item>
@@ -27,6 +30,11 @@ internal sealed record UninstallPlan(UninstallKind Kind, bool Silent, UninstallC
     public static UninstallPlan? For(InstalledApplication application, UninstallMode mode)
     {
         var silent = mode == UninstallMode.Silent;
+
+        if (silent && application.Scope == InstallScope.Machine && application.Uninstall is { IsWindowsInstaller: true } msi)
+        {
+            return new UninstallPlan(UninstallKind.RegisteredUninstaller, Silent: true, msi);
+        }
 
         if (application.IsManagedByPackageManager)
         {

@@ -31,6 +31,14 @@ internal sealed class SingleInstance : IDisposable
             return new SingleInstance(mutex, signal);
         }
 
+        // This launch came from the user (Start menu, shortcut), so it owns the foreground right now.
+        // Hand that right over, or Windows' foreground lock keeps the running dock's panel behind
+        // other windows (QA, 0.3.0).
+        if (OperatingSystem.IsWindows())
+        {
+            NativeMethods.AllowSetForegroundWindow(NativeMethods.AllowAnyProcess);
+        }
+
         signal?.Set();
         signal?.Dispose();
         mutex.Dispose();

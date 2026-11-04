@@ -50,7 +50,7 @@ public class UninstallCommandTests
         UninstallCommand.TryParse("MsiExec.exe /I{23170F69-40C1-2702-2301-000001000000}", out var command);
 
         Assert.Equal(("msiexec.exe", "/X{23170F69-40C1-2702-2301-000001000000}"), command!.ToProcessCommand(silent: false));
-        Assert.Equal(("msiexec.exe", "/X{23170F69-40C1-2702-2301-000001000000} /qn /norestart"), command.ToProcessCommand(silent: true));
+        Assert.Equal(("msiexec.exe", "/X{23170F69-40C1-2702-2301-000001000000} /passive /norestart"), command.ToProcessCommand(silent: true));
     }
 
     [Fact]

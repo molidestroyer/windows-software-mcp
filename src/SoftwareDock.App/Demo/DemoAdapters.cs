@@ -2,7 +2,11 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using SoftwareDock.Application.Abstractions;
 using SoftwareDock.Domain.Applications;
+using SoftwareDock.Domain.Leftovers;
 using SoftwareDock.Domain.Monitoring;
+using SoftwareDock.Domain.Security;
+using SoftwareDock.Domain.Startup;
+using SoftwareDock.Domain.Usage;
 using SoftwareDock.Domain.Operations;
 using SoftwareDock.Domain.Packages;
 
@@ -21,12 +25,16 @@ public static class DemoAdapters
         services.TryAddSingleton<IPackageManager>(sp => sp.GetRequiredService<DemoMachine>());
         services.TryAddSingleton<IUninstallerLauncher>(sp => sp.GetRequiredService<DemoMachine>());
         services.TryAddSingleton<ISystemMonitor>(sp => sp.GetRequiredService<DemoMachine>());
+        services.TryAddSingleton<IStartupItemSource>(sp => sp.GetRequiredService<DemoMachine>());
+        services.TryAddSingleton<IUsageHistorySource>(sp => sp.GetRequiredService<DemoMachine>());
+        services.TryAddSingleton<IVulnerabilityFeed>(sp => sp.GetRequiredService<DemoMachine>());
+        services.TryAddSingleton<ILeftoverCleaner>(sp => sp.GetRequiredService<DemoMachine>());
         return services;
     }
 }
 
 /// <summary>A pretend PC whose state changes as operations run.</summary>
-public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher, ISystemMonitor
+public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher, ISystemMonitor, IStartupItemSource, IUsageHistorySource, IVulnerabilityFeed, ILeftoverCleaner
 {
     private static readonly (string Name, string Id, string Publisher, string Version, string? Available, string? Source)[] Seed =
     [
@@ -80,7 +88,30 @@ public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, 
         ("Ollama.Ollama", "ollama.exe", 1.6, 4_200L << 20),
     ];
 
+    // App id → days since last opened, as Explorer's launch history would report.
+    private static readonly (string App, string Exe, int DaysAgo, int Runs)[] History =
+    [
+        ("Google.Chrome", "chrome.exe", 0, 812),
+        ("Microsoft.VisualStudioCode", "Code.exe", 0, 430),
+        ("Valve.Steam", "steam.exe", 241, 37),
+        ("OBSProject.OBSStudio", "obs64.exe", 156, 12),
+        ("Zoom.Zoom", "Zoom.exe", 402, 9),
+        ("Postman.Postman", "Postman.exe", 120, 51),
+        ("Discord.Discord", "Discord.exe", 3, 220),
+    ];
+
     private readonly Lock _lock = new();
+    private readonly List<StartupItem> _startup =
+    [
+        new("Discord", @"""C:\Program Files\Discord.Discord\Update.exe"" --processStart Discord.exe", StartupLocation.UserRun, @"C:\Program Files\Discord.Discord\Update.exe", true),
+        new("Spotify", @"""C:\Program Files\Spotify.Spotify\Spotify.exe"" /minimized", StartupLocation.UserRun, @"C:\Program Files\Spotify.Spotify\Spotify.exe", true),
+        new("Steam", @"""C:\Program Files\Valve.Steam\steam.exe"" -silent", StartupLocation.UserRun, @"C:\Program Files\Valve.Steam\steam.exe", true),
+        new("Docker Desktop", @"C:\Program Files\Docker.DockerDesktop\Docker Desktop.exe -Autostart", StartupLocation.UserRun, @"C:\Program Files\Docker.DockerDesktop\Docker Desktop.exe", false),
+        new("Ollama.lnk", @"C:\Users\demo\AppData\Roaming\Microsoft\Windows\Start Menu\Programs\Startup\Ollama.lnk", StartupLocation.UserStartupFolder, @"C:\Program Files\Ollama.Ollama\ollama app.exe", true),
+        new("SecurityHealth", @"%windir%\system32\SecurityHealthSystray.exe", StartupLocation.MachineRun, @"C:\Windows\system32\SecurityHealthSystray.exe", true),
+        new("Contoso Reporting Agent", @"""C:\Program Files\ARP\Machine\X86\{6F320B93-EE3C-4826-85E0-ADF79F8D4C61}\agent.exe""", StartupLocation.MachineRun32, @"C:\Program Files\ARP\Machine\X86\{6F320B93-EE3C-4826-85E0-ADF79F8D4C61}\agent.exe", true),
+    ];
+
     private readonly System.Diagnostics.Stopwatch _uptime = System.Diagnostics.Stopwatch.StartNew();
     private readonly List<InstalledPackage> _installed;
     private readonly TimeSpan _stepDelay;
@@ -203,6 +234,64 @@ public sealed class DemoMachine : IInstalledApplicationSource, IPackageManager, 
     }
 
     public MemoryStatus GetMemoryStatus() => new(32L << 30, 17L << 30);
+
+    public Task<IReadOnlyList<StartupItem>> ListAsync(CancellationToken cancellationToken)
+    {
+        lock (_lock)
+        {
+            return Task.FromResult<IReadOnlyList<StartupItem>>(_startup.ToList());
+        }
+    }
+
+    public Task<OperationResult> SetEnabledAsync(StartupItem item, bool enabled, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!item.IsPerUser)
+        {
+            return Task.FromResult(OperationResult.Failure($"{item.Name} starts for every user; changing it needs administrator rights."));
+        }
+
+        lock (_lock)
+        {
+            var index = _startup.FindIndex(s => s.Id == item.Id);
+            _startup[index] = _startup[index] with { IsEnabled = enabled };
+        }
+
+        return Task.FromResult(OperationResult.Success($"{item.Name} will {(enabled ? string.Empty : "no longer ")}start with Windows."));
+    }
+
+    public IReadOnlyList<UsageRecord> GetUsage() =>
+        History.Select(h => new UsageRecord($@"{InstallFolder(h.App)}\{h.Exe}", DateTimeOffset.UtcNow.AddDays(-h.DaysAgo), h.Runs)).ToList();
+
+    public Task<IReadOnlyList<KnownExploitedVulnerability>> GetAsync(CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        return Task.FromResult<IReadOnlyList<KnownExploitedVulnerability>>(
+        [
+            new("CVE-2026-31337", "Notepad++", "Notepad++", "Notepad++ Plugin Loader Code Execution", today.AddDays(-12), false),
+            new("CVE-2026-29001", "Docker", "Desktop", "Docker Desktop Container Escape", today.AddDays(-30), true),
+            new("CVE-2025-1001", "Microsoft", "Windows", "Windows Win32k Privilege Escalation", today.AddDays(-20), false),
+        ]);
+    }
+
+    public Task<IReadOnlyList<LeftoverFolder>> FindAsync(
+        InstalledApplication application,
+        IReadOnlyCollection<InstalledApplication> stillInstalled,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        var folders = new KnownFolders(@"C:\Program Files", @"C:\Program Files (x86)", @"C:\ProgramData", @"C:\Users\demo\AppData\Roaming", @"C:\Users\demo\AppData\Local");
+
+        // Pretend the uninstaller forgot the user's data folders, as most do.
+        return Task.FromResult<IReadOnlyList<LeftoverFolder>>(LeftoverCandidates.For(application, folders, stillInstalled)
+            .Where(p => p.Contains("AppData", StringComparison.Ordinal) && !p.Contains(@"\Programs\", StringComparison.Ordinal))
+            .Take(2)
+            .Select((p, i) => new LeftoverFolder(p, (i + 1) * 87L << 20))
+            .ToList());
+    }
+
+    public Task<OperationResult> RecycleAsync(IReadOnlyList<LeftoverFolder> folders, CancellationToken cancellationToken) =>
+        Task.FromResult(OperationResult.Success($"Moved {folders.Count} folders to the Recycle Bin."));
 
     private static string InstallFolder(string id) => $@"C:\Program Files\{id}";
 

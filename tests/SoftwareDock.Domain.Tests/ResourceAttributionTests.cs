@@ -102,7 +102,7 @@ public class ResourceAttributionTests
     [Fact]
     public void IconOutsideAnExe_IsNotARoot()
     {
-        Assert.Null(ResourceAttribution.RootOf(App("x", icon: @"C:\Windows\Installer\{GUID}\icon.ico")));
+        Assert.Null(ApplicationRoots.RootOf(App("x", icon: @"C:\Windows\Installer\{GUID}\icon.ico")));
     }
 
     [Fact]

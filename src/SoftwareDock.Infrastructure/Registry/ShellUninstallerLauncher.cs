@@ -24,6 +24,8 @@ public sealed partial class ShellUninstallerLauncher(ILogger<ShellUninstallerLau
 {
     private const int ErrorCancelled = 1223;
     private const int MsiUserCancelled = 1602;
+    private const int MsiFatalError = 1603;
+    private const int MsiAdminRequired = 1730;
     private const int MsiRebootRequired = 3010;
     private const int MsiRebootInitiated = 1641;
 
@@ -61,6 +63,12 @@ public sealed partial class ShellUninstallerLauncher(ILogger<ShellUninstallerLau
                 MsiRebootRequired or MsiRebootInitiated => new OperationResult(
                     OperationStatus.SucceededRebootRequired, "Uninstalled. Restart Windows to finish.", process.ExitCode),
                 MsiUserCancelled => new OperationResult(OperationStatus.Cancelled, "The uninstaller was cancelled.", process.ExitCode),
+                MsiAdminRequired => new OperationResult(OperationStatus.Cancelled, "Administrator approval was not given: the Windows prompt was declined or timed out.", process.ExitCode),
+
+                // msiexec folds a declined or timed-out UAC prompt into 1603 (QA, 0.3.0); say what most likely happened.
+                MsiFatalError when command.IsWindowsInstaller => OperationResult.Failure(
+                    "The uninstaller failed (1603). If a Windows administrator prompt appeared, it was declined or timed out; try again and approve it.",
+                    process.ExitCode),
                 var code => OperationResult.Failure($"The uninstaller exited with code {code}.", code),
             };
         }

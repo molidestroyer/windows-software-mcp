@@ -24,12 +24,24 @@ public sealed class SettingsAndBackupTests : IDisposable
     {
         var path = Path.Combine(_folder, "settings.json");
         new JsonFileUserSettingsStore(path, NullLogger<JsonFileUserSettingsStore>.Instance)
-            .Update(s => s with { ShowResourceUsage = false, SortOrder = SortOrder.Size });
+            .Update(s => s with
+            {
+                ShowResourceUsage = false,
+                SortOrder = SortOrder.Size,
+                ScheduledUpdates = Domain.Updates.UpdateScheduleMode.Weekly,
+                LastScheduledRun = new DateTime(2026, 11, 1, 3, 0, 0),
+                PinnedApplications = [@"ARP\MACHINE\X64\GIT"],
+                SkippedVersions = new Dictionary<string, string> { ["VLC"] = "3.1" },
+            });
 
         var reloaded = new JsonFileUserSettingsStore(path, NullLogger<JsonFileUserSettingsStore>.Instance).Current;
 
         Assert.False(reloaded.ShowResourceUsage);
         Assert.Equal(SortOrder.Size, reloaded.SortOrder);
+        Assert.Equal(Domain.Updates.UpdateScheduleMode.Weekly, reloaded.ScheduledUpdates);
+        Assert.Equal(new DateTime(2026, 11, 1, 3, 0, 0), reloaded.LastScheduledRun);
+        Assert.Equal([@"ARP\MACHINE\X64\GIT"], reloaded.PinnedApplications);
+        Assert.Equal("3.1", reloaded.UpdateRules.SkippedVersions["VLC"]);
     }
 
     [Fact]
@@ -39,7 +51,7 @@ public sealed class SettingsAndBackupTests : IDisposable
         var path = Path.Combine(_folder, "settings.json");
         File.WriteAllText(path, "{ not json");
 
-        Assert.Equal(new UserSettings(), new JsonFileUserSettingsStore(path, NullLogger<JsonFileUserSettingsStore>.Instance).Current);
+        Assert.Equivalent(new UserSettings(), new JsonFileUserSettingsStore(path, NullLogger<JsonFileUserSettingsStore>.Instance).Current);
     }
 
     [Fact]

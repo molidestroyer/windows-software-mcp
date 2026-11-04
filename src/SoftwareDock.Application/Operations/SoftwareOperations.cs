@@ -100,6 +100,28 @@ public sealed partial class SoftwareOperations : ISoftwareOperations, IDisposabl
             cancellationToken);
     }
 
+    public async Task<BatchResult> UpgradeManyAsync(
+        IReadOnlyList<ApplicationKey> keys,
+        IProgress<BatchProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(keys);
+        var snapshot = await _inventory.GetSnapshotAsync(forceRefresh: false, cancellationToken);
+        var items = keys.Distinct().Select(k => (Key: k, App: snapshot.Find(k))).ToList();
+
+        return await RunBatchAsync(
+            items,
+            i => i.App?.Name ?? i.Key.Value,
+            (i, lines, ct) => i.App switch
+            {
+                null => Task.FromResult(NotInstalled(i.Key)),
+                { CanUpgrade: false } app => Task.FromResult(OperationResult.Failure($"{app.Name} has no upgrade available.")),
+                var app => RunExclusiveAsync($"Upgrade {app.Name}", c => _packageManager.UpgradeAsync(app.PackageId!, lines, c), ct),
+            },
+            progress,
+            cancellationToken);
+    }
+
     public Task<BatchResult> InstallManyAsync(
         IReadOnlyList<InstallRequest> requests,
         IProgress<BatchProgress>? progress,

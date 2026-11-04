@@ -6,6 +6,7 @@ using SoftwareDock.App.Services;
 using SoftwareDock.App.Settings;
 using SoftwareDock.Application.Backup;
 using SoftwareDock.Domain.Backup;
+using SoftwareDock.Domain.Updates;
 
 namespace SoftwareDock.App.ViewModels;
 
@@ -88,6 +89,34 @@ public sealed partial class SettingsViewModel : ObservableObject
     public string LastBackupText => _autoBackup.LastBackupAt is { } at
         ? $"Last saved {at.ToLocalTime().ToString("g", CultureInfo.CurrentCulture)} — updated whenever your software changes"
         : "Saved whenever your software changes";
+
+    public bool Notifications
+    {
+        get => _store.Current.Notifications;
+        set => _store.Update(s => s with { Notifications = value });
+    }
+
+    public bool SecurityAlerts
+    {
+        get => _store.Current.SecurityAlerts;
+        set => _store.Update(s => s with { SecurityAlerts = value });
+    }
+
+    public IReadOnlyList<ScheduleOption> ScheduleOptions => ScheduleOption.All;
+
+    public ScheduleOption SelectedSchedule
+    {
+        get => ScheduleOption.All.First(o => o.Mode == _store.Current.ScheduledUpdates);
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            _store.Update(s => s with { ScheduledUpdates = value.Mode });
+        }
+    }
+
+    public string ScheduleHint => _store.Current.ScheduledUpdates == UpdateScheduleMode.Off
+        ? "Updates wait for you to press Update."
+        : $"At {_store.Current.ScheduledUpdateHour:00}:00, or at the next start if the PC was off. Pinned apps and skipped versions are left alone; apps that need administrator rights will ask when you are back.";
 
     public bool AutoUpdateApp
     {
@@ -179,4 +208,16 @@ public sealed partial class SettingsViewModel : ObservableObject
         Message = message;
         MessageIsError = isError;
     }
+}
+
+public sealed record ScheduleOption(UpdateScheduleMode Mode, string Label)
+{
+    public static IReadOnlyList<ScheduleOption> All { get; } =
+    [
+        new(UpdateScheduleMode.Off, "Off"),
+        new(UpdateScheduleMode.Daily, "Every night"),
+        new(UpdateScheduleMode.Weekly, "Every Sunday night"),
+    ];
+
+    public override string ToString() => Label;
 }

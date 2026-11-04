@@ -42,6 +42,9 @@ internal sealed class McpServerFixture : IAsyncDisposable
         builder.Services.AddSingleton<IPackageManager>(machine);
         builder.Services.AddSingleton<IUninstallerLauncher>(machine);
         builder.Services.AddSingleton<ISystemMonitor>(machine);
+        builder.Services.AddSingleton<IStartupItemSource>(machine);
+        builder.Services.AddSingleton<IUsageHistorySource>(machine);
+        builder.Services.AddSingleton<IVulnerabilityFeed>(machine);
         builder.Services.AddSoftwareDockApplication();
         builder.Services
             .AddSoftwareDockMcpServer(readOnly)
@@ -69,8 +72,22 @@ internal sealed class McpServerFixture : IAsyncDisposable
     }
 }
 
-internal sealed class FakeMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher, ISystemMonitor
+internal sealed class FakeMachine : IInstalledApplicationSource, IPackageManager, IUninstallerLauncher, ISystemMonitor, IStartupItemSource, IUsageHistorySource, IVulnerabilityFeed
 {
+    public Task<IReadOnlyList<Domain.Startup.StartupItem>> ListAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Domain.Startup.StartupItem>>(
+            [new("GitUpdater", @"""C:\Program Files\Git\updater.exe"" --quiet", Domain.Startup.StartupLocation.UserRun, @"C:\Program Files\Git\updater.exe", true)]);
+
+    public Task<OperationResult> SetEnabledAsync(Domain.Startup.StartupItem item, bool enabled, CancellationToken cancellationToken) =>
+        Record($"startup {item.Name}={enabled}");
+
+    public IReadOnlyList<Domain.Usage.UsageRecord> GetUsage() =>
+        [new(@"C:\Program Files\Git\git-bash.exe", DateTimeOffset.UtcNow.AddDays(-200), 3)];
+
+    public Task<IReadOnlyList<Domain.Security.KnownExploitedVulnerability>> GetAsync(CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<Domain.Security.KnownExploitedVulnerability>>(
+            [new("CVE-2026-4242", "Git", "Git", "Git remote code execution", DateOnly.FromDateTime(DateTime.UtcNow.AddDays(-5)), false)]);
+
     private int _ticks;
 
     public int ProcessorCount => 4;
@@ -90,7 +107,7 @@ internal sealed class FakeMachine : IInstalledApplicationSource, IPackageManager
         UninstallCommand.TryParse(@"""C:\Program Files\Git\unins000.exe""", out var uninstall);
         IReadOnlyList<InstalledApplication> apps =
         [
-            new() { Key = GitKey, Name = "Git", Publisher = "The Git Development Community", Version = "2.45.0", Origin = ApplicationOrigin.Registry, Scope = InstallScope.Machine, Uninstall = uninstall, InstallLocation = @"C:\Program Files\Git" },
+            new() { Key = GitKey, Name = "Git", Publisher = "The Git Development Community", Version = "2.45.0", Origin = ApplicationOrigin.Registry, Scope = InstallScope.Machine, Uninstall = uninstall, InstallLocation = @"C:\Program Files\Git", EstimatedSizeBytes = 300L << 20 },
         ];
         return Task.FromResult(apps);
     }
