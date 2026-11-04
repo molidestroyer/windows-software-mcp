@@ -52,14 +52,17 @@ public sealed partial class RecycleBinLeftoverCleaner(ISystemMonitor system) : I
         // Re-checked at the last moment: something may have started from, or been added to PATH
         // inside, one of these folders since they were offered.
         var inUse = FoldersInUse().Select(f => ApplicationRoots.NormalizePath(f, isDirectory: true)).OfType<string>().Where(f => f.Length > 3).ToList();
-        var existing = folders
-            .Where(f => Directory.Exists(f.Path))
+        var present = folders.Where(f => Directory.Exists(f.Path)).ToList();
+        var existing = present
             .Where(f => ApplicationRoots.NormalizePath(f.Path, isDirectory: true) is { } path
                 && !inUse.Any(u => u.StartsWith(path, StringComparison.Ordinal) || path.StartsWith(u, StringComparison.Ordinal)))
             .ToList();
+        var kept = present.Count - existing.Count;
+        var keptNote = kept == 0 ? string.Empty : $" Kept {kept} folder{(kept == 1 ? string.Empty : "s")} in use (on PATH or by a running program).";
         if (existing.Count == 0)
         {
-            return Task.FromResult(OperationResult.Success("Nothing left to clean."));
+            // QA, 0.3.0: "Nothing left to clean." while the folder was still there read as success.
+            return Task.FromResult(OperationResult.Success(kept == 0 ? "Nothing left to clean." : keptNote.Trim()));
         }
 
         return Task.Run(() =>
@@ -76,7 +79,7 @@ public sealed partial class RecycleBinLeftoverCleaner(ISystemMonitor system) : I
                 };
                 var code = SHFileOperation(ref operation);
                 return code == 0 && !operation.AnyOperationsAborted
-                    ? OperationResult.Success($"Moved {existing.Count} folder{(existing.Count == 1 ? string.Empty : "s")} to the Recycle Bin.")
+                    ? OperationResult.Success($"Moved {existing.Count} folder{(existing.Count == 1 ? string.Empty : "s")} to the Recycle Bin.{keptNote}")
                     : OperationResult.Failure($"Some folders could not be moved to the Recycle Bin (error {code}); they may be in use.", code);
             }
             finally
