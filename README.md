@@ -97,16 +97,9 @@ change in ⚙️ is stored in `%LOCALAPPDATA%\SoftwareDock\settings.json`.
 
 ## Releasing
 
-Push a tag; CI tests, publishes self-contained, packs with Velopack and creates the release that
-installed docks update from:
-
-```bash
-git tag v0.3.0
-```
-
-```bash
-git push origin v0.3.0
-```
+Bump `<Version>` in `Directory.Build.props` and push to `main`. When no release exists for that
+version, CI tests, publishes self-contained, packs with Velopack, tags `vX.Y.Z` and creates the
+release that installed docks update from. Pushing a `v*` tag by hand does the same.
 
 ## Connect an AI agent (MCP)
 

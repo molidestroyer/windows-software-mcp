@@ -14,8 +14,9 @@ App Installer auto-update, Squirrel.Windows (unmaintained) and Velopack (its suc
 
 **Velopack**, behind an `IAppUpdater` port in the app:
 
-- CI, on every `v*` tag: self-contained publish of the dock and the MCP server into one folder,
-  `vpk pack` (Setup.exe, portable zip, full + delta `.nupkg`), `vpk upload github` to the release.
+- CI, whenever `<Version>` in `Directory.Build.props` names a release that does not exist yet (or
+  on a `v*` tag): self-contained publish of the dock and the MCP server into one folder,
+  `vpk pack` (Setup.exe, portable zip, full + delta `.nupkg`), `vpk upload github`, which creates the tag and the release.
   The previous release is downloaded first so deltas can be computed.
 - Install goes to `%LOCALAPPDATA%\SoftwareDock` — per user, no admin — with a Start-menu
   shortcut and an entry in *Installed apps* (so the dock lists itself).

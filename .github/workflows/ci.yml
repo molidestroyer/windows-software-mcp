@@ -37,6 +37,21 @@ jobs:
           "value=$version" >> $env:GITHUB_OUTPUT
           Write-Host "Version $version"
 
+      # A release is due on a v* tag, or on main when <Version> names a release that does not exist yet:
+      # bumping the version in Directory.Build.props is all it takes to ship.
+      - name: Release needed?
+        id: release
+        if: github.event_name == 'push'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "v${{ steps.version.outputs.value }}" --repo $env:GITHUB_REPOSITORY *> $null
+          $needed = $LASTEXITCODE -ne 0
+          $global:LASTEXITCODE = 0
+          "needed=$($needed.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          Write-Host "Release v${{ steps.version.outputs.value }} needed: $needed"
+
       - name: Test
         env:
           SOFTWAREDOCK_SCREENSHOTS: ${{ github.workspace }}/artifacts/screenshots
@@ -62,7 +77,7 @@ jobs:
 
       # Releases: Setup.exe, a portable zip and delta packages, which the installed dock reads to update itself.
       - name: Package release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.release.outputs.needed == 'true'
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -76,4 +91,4 @@ jobs:
             --packTitle "Software Dock" --packAuthors "Miguel Molina" `
             --icon src/SoftwareDock.App/Assets/app.ico --shortcuts StartMenuRoot -o artifacts/releases
           vpk upload github --repoUrl $env:REPO_URL --token $env:GITHUB_TOKEN -o artifacts/releases `
-            --publish --releaseName "Software Dock $v" --tag "v$v"
+            --publish --releaseName "Software Dock $v" --tag "v$v" --targetCommitish $env:GITHUB_SHA

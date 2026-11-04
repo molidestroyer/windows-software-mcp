@@ -11,7 +11,7 @@ dotnet build SoftwareDock.slnx
 dotnet test SoftwareDock.slnx
 dotnet run --project src/SoftwareDock.App -- --demo        # in-memory PC, safe anywhere
 SOFTWAREDOCK_SCREENSHOTS=$PWD/docs/images dotnet test tests/SoftwareDock.App.Tests   # regenerate README screenshots (absolute path)
-git tag vX.Y.Z && git push origin vX.Y.Z                    # release: CI packs with Velopack and publishes
+# release: bump <Version> in Directory.Build.props and push to main; CI tags vX.Y.Z and publishes with Velopack
 ```
 
 Everything builds and tests on Linux too (`EnableWindowsTargeting`); the real adapters only run
