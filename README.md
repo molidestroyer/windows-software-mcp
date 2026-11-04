@@ -27,13 +27,17 @@ The same capabilities are exposed as an **MCP server**, so Claude Code, Copilot 
 can answer *"what do I have installed?"*, *"what is eating my memory?"*, *"update everything"* or
 *"install VLC"*.
 
-| Installed + gauges | Bulk uninstall | Settings |
+| Installed + gauges | Updates + security | Startup apps |
 | --- | --- | --- |
-| ![Installed apps with CPU and memory](docs/images/dock-installed.png) | ![Several apps selected for removal](docs/images/dock-select.png) | ![Settings](docs/images/dock-settings.png) |
+| ![Installed apps with CPU and memory](docs/images/dock-installed.png) | ![Updates, exploited first](docs/images/dock-updates.png) | ![What starts with Windows](docs/images/dock-startup.png) |
 
-| Updates | Discover | Restore from backup |
+| Leftovers, pinned, unused | Bulk uninstall | Settings |
 | --- | --- | --- |
-| ![Updates](docs/images/dock-updates.png) | ![Discover](docs/images/dock-discover.png) | ![Restore](docs/images/dock-restore.png) |
+| ![Leftovers after uninstall](docs/images/dock-leftovers.png) | ![Several apps selected for removal](docs/images/dock-select.png) | ![Settings](docs/images/dock-settings.png) |
+
+| Discover | Restore from backup |
+| --- | --- |
+| ![Discover](docs/images/dock-discover.png) | ![Restore](docs/images/dock-restore.png) |
 
 *Rendered by the headless UI tests from the real window, in demo mode.*
 
@@ -58,6 +62,19 @@ can answer *"what do I have installed?"*, *"what is eating my memory?"*, *"updat
   WinGet's, which restores a new PC with nothing but `winget import -i software-winget.json`.
   *Restore from backup* lists what is missing, ticks it all, installs it in one go, and names the
   apps you will need to fetch by hand.
+- **Security alerts** — apps with an update pending that attackers are exploiting right now (CISA's
+  Known Exploited Vulnerabilities catalog) get an *Exploited* badge and go first in Updates.
+- **Startup apps** — everything Windows starts at sign-in, with Task Manager's own switch: disable
+  without deleting, re-enable any time.
+- **Leftovers** — after an uninstall, the folders it left behind (install folder, AppData,
+  ProgramData) are offered for cleanup, to the Recycle Bin.
+- **Unused apps** — *Not opened for 8 months* badges from Windows' own launch history, and a
+  *Least used* sort to find what to remove.
+- **Pin or skip** — right-click an app: *Skip version 2.47.1* or *Pin — never update*.
+- **Updates on a schedule** — every night or every Sunday night; a run missed while the PC was off
+  happens when it wakes.
+- **Windows notifications** — new updates (once per version), security alerts first, scheduled-run
+  results, a new dock version.
 - **Start with Windows**, single instance, per-monitor DPI, settings per user.
 - **Updates itself** from GitHub releases (Velopack): it downloads in the background and offers
   *Restart to update*.
@@ -136,6 +153,10 @@ each tool takes and where it comes from, and to confirm changes with the user fi
 | `uninstall_software` | destructive | Remove an installed app by `key` |
 | `list_running_software` | read-only | Running apps with CPU % and memory, heaviest first |
 | `export_software_backup` | read-only | Backup JSON in Software Dock or `winget import` format |
+| `get_security_advisories` | read-only | Apps with pending updates that are actively exploited (CISA KEV) |
+| `list_unused_software` | read-only | Apps not opened for N days, largest first |
+| `list_startup_apps` | read-only | What starts with Windows, enabled or not, and which app it belongs to |
+| `set_startup_app_enabled` | changes the PC | Enable/disable a startup app the way Task Manager does |
 
 Add `"args": ["--read-only"]` to expose only the read-only tools.
 
@@ -159,6 +180,7 @@ Decisions worth reading before changing things:
 3. [A tray app in Avalonia, not a PowerToys module](docs/adr/0003-tray-app-not-powertoys-module.md)
 4. [MCP: discovery through instructions, safety through the domain](docs/adr/0004-mcp-discovery-and-safety.md)
 5. [Releases and self-update with Velopack](docs/adr/0005-self-update-with-velopack.md)
+6. [PC hygiene: startup, security, leftovers, unused apps, schedules, notifications](docs/adr/0006-pc-hygiene-features.md)
 
 ## How it compares
 
@@ -170,6 +192,8 @@ Decisions worth reading before changing things:
 | Bulk uninstall | ✅ | ✅ | — | — |
 | CPU / memory per app | ✅ | — | — | — |
 | Backup / restore | ✅ (+ `winget import` format) | ✅ | — | — |
+| Exploited-vulnerability alerts | ✅ | — | — | — |
+| Startup apps / leftovers / unused apps | ✅ | — | — | — |
 | MCP server for agents | ✅ inventory + install/upgrade/uninstall | — | ✅ find + install | — |
 
 UniGetUI is the most complete GUI if you want many package managers. Software Dock is deliberately

@@ -17,6 +17,6 @@
     <Copyright>Copyright © Miguel Molina</Copyright>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/molidestroyer/windows-software-mcp</RepositoryUrl>
-    <Version>0.2.1</Version>
+    <Version>0.3.0</Version>
   </PropertyGroup>
 </Project>
