@@ -10,6 +10,7 @@
     <Project Path="tests/SoftwareDock.Domain.Tests/SoftwareDock.Domain.Tests.csproj" />
     <Project Path="tests/SoftwareDock.Application.Tests/SoftwareDock.Application.Tests.csproj" />
     <Project Path="tests/SoftwareDock.Infrastructure.Tests/SoftwareDock.Infrastructure.Tests.csproj" />
+    <Project Path="tests/SoftwareDock.Mcp.Tests/SoftwareDock.Mcp.Tests.csproj" />
     <Project Path="tests/SoftwareDock.App.Tests/SoftwareDock.App.Tests.csproj" />
   </Folder>
 </Solution>
