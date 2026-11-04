@@ -334,11 +334,21 @@ public sealed partial class DockViewModel : ObservableObject, IDisposable
         IsBusy = ++_runningOperations > 0;
         SetStatus(description, isError: false);
 
-        // Created on the UI thread, so installer output lines are marshalled back to it.
-        var progress = new Progress<string>(line => SetStatus(line, isError: false));
+        // Created on the UI thread, so installer output lines are marshalled back to it. Progress
+        // is delivered asynchronously: a line posted just before the operation returns can arrive
+        // after it, and must not overwrite the result.
+        var finished = false;
+        var progress = new Progress<string>(line =>
+        {
+            if (!Volatile.Read(ref finished))
+            {
+                SetStatus(line, isError: false);
+            }
+        });
         try
         {
             var result = await operation(progress, CancellationToken.None);
+            Volatile.Write(ref finished, true);
             SetStatus(result.Message, isError: !result.IsSuccess);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
