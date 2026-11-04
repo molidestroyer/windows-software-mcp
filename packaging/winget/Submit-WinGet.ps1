@@ -3,7 +3,9 @@
   Opens the pull request on microsoft/winget-pkgs for a released version of Software Dock.
 
 .DESCRIPTION
-  First time: renders the templates next to this script and submits them as a new package.
+  First time: renders the templates next to this script ({{VERSION}}, {{URL}}, {{SHA256}}, {{DATE}})
+  and submits them as a new package. Each template starts with its schema header: wingetcreate
+  rejects manifests without it ("Schema header not found").
   Afterwards: `wingetcreate update`, which copies the accepted manifests and changes version, URL and
   hash. Does nothing when the version is already in winget-pkgs or the first submission is still
   waiting for review (a second PR would only be closed as a duplicate).

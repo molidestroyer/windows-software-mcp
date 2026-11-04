@@ -1,4 +1,4 @@
-# Template: Submit-WinGet.ps1 fills {{VERSION}}, {{URL}}, {{SHA256}} and {{DATE}}.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.10.0.schema.json
 PackageIdentifier: MiguelMolina.SoftwareDock
 PackageVersion: {{VERSION}}
 Platform:

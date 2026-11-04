@@ -1,4 +1,4 @@
-# Template: Submit-WinGet.ps1 fills {{VERSION}}; wingetcreate validates before opening the PR.
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.version.1.10.0.schema.json
 PackageIdentifier: MiguelMolina.SoftwareDock
 PackageVersion: {{VERSION}}
 DefaultLocale: en-US
