@@ -9,12 +9,15 @@ on:
 permissions:
   contents: write
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  REPO_URL: https://github.com/${{ github.repository }}
+  VPK_VERSION: 1.2.158
+
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      DOTNET_NOLOGO: true
-      DOTNET_CLI_TELEMETRY_OPTOUT: true
     steps:
       - uses: actions/checkout@v4
 
@@ -22,31 +25,55 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          } else {
+            $version = ([xml](Get-Content Directory.Build.props)).Project.PropertyGroup.Version
+          }
+          "value=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Version $version"
+
       - name: Test
         env:
           SOFTWAREDOCK_SCREENSHOTS: ${{ github.workspace }}/artifacts/screenshots
         run: dotnet test SoftwareDock.slnx -c Release
 
+      # Self-contained: users need nothing installed but Windows. Dock and MCP server ship side by side.
       - name: Publish
         shell: pwsh
         run: |
-          dotnet publish src/SoftwareDock.App -c Release -r win-x64 --self-contained false -o artifacts/SoftwareDock
-          dotnet publish src/SoftwareDock.Mcp -c Release -r win-x64 --self-contained false -o artifacts/SoftwareDock
-          Compress-Archive -Path artifacts/SoftwareDock/* -DestinationPath artifacts/SoftwareDock-win-x64.zip
+          $v = '${{ steps.version.outputs.value }}'
+          dotnet publish src/SoftwareDock.App -c Release -r win-x64 --self-contained -p:Version=$v -o artifacts/publish
+          dotnet publish src/SoftwareDock.Mcp -c Release -r win-x64 --self-contained -p:Version=$v -o artifacts/publish
 
       - uses: actions/upload-artifact@v4
         with:
           name: SoftwareDock-win-x64
-          path: artifacts/SoftwareDock-win-x64.zip
+          path: artifacts/publish
 
       - uses: actions/upload-artifact@v4
         with:
           name: screenshots
           path: artifacts/screenshots
 
-      - name: Release
+      # Releases: Setup.exe, a portable zip and delta packages, which the installed dock reads to update itself.
+      - name: Package release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: artifacts/SoftwareDock-win-x64.zip
-          generate_release_notes: true
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $v = '${{ steps.version.outputs.value }}'
+          dotnet tool install -g vpk --version $env:VPK_VERSION
+          # The previous release is the base for delta packages; the first release has none.
+          vpk download github --repoUrl $env:REPO_URL --token $env:GITHUB_TOKEN -o artifacts/releases
+          if ($LASTEXITCODE -ne 0) { Write-Host 'No previous release: full package only.'; $global:LASTEXITCODE = 0 }
+          vpk pack --packId SoftwareDock --packVersion $v --packDir artifacts/publish --mainExe SoftwareDock.exe `
+            --packTitle "Software Dock" --packAuthors "Miguel Molina" `
+            --icon src/SoftwareDock.App/Assets/app.ico --shortcuts StartMenuRoot -o artifacts/releases
+          vpk upload github --repoUrl $env:REPO_URL --token $env:GITHUB_TOKEN -o artifacts/releases `
+            --publish --releaseName "Software Dock $v" --tag "v$v"

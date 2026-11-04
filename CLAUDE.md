@@ -10,7 +10,8 @@ commits). Conventional commits.
 dotnet build SoftwareDock.slnx
 dotnet test SoftwareDock.slnx
 dotnet run --project src/SoftwareDock.App -- --demo        # in-memory PC, safe anywhere
-SOFTWAREDOCK_SCREENSHOTS=docs/images dotnet test tests/SoftwareDock.App.Tests   # regenerate README screenshots
+SOFTWAREDOCK_SCREENSHOTS=$PWD/docs/images dotnet test tests/SoftwareDock.App.Tests   # regenerate README screenshots (absolute path)
+git tag vX.Y.Z && git push origin vX.Y.Z                    # release: CI packs with Velopack and publishes
 ```
 
 Everything builds and tests on Linux too (`EnableWindowsTargeting`); the real adapters only run
@@ -24,7 +25,7 @@ on Windows.
 | `Application` | `SoftwareInventory` (cached snapshot), `SoftwareOperations` (serialized install/upgrade/uninstall), `UninstallPlan`. Ports in `Abstractions/`. |
 | `Infrastructure` | `WinGetPackageManager` + `WinGetTableParser`, `RegistryInstalledApplicationSource`, `ShellUninstallerLauncher`, `ProcessRunner`. |
 | `Mcp` | Tools, `ServerInstructions`, `McpServerRegistration`, `--print-config`, `--read-only`. |
-| `App` | `DockViewModel`, `DockWindow` (panel), `DockShell` (tray, hotkey, startup), `Platform/` (Win32), `Demo/`. |
+| `App` | `DockViewModel` (+ `SettingsViewModel`, `RestoreViewModel`), `DockWindow` (panel), `DockShell` (tray, hotkey, background checks), `Services/` (auto-backup, self-update, shell), `Settings/` (per-user JSON), `Platform/` (Win32), `Controls/GaugeRing`, `Demo/`. |
 
 ## Decisions worth not undoing
 
@@ -42,6 +43,15 @@ on Windows.
 - **Uninstall confirmation is inline**, not a modal: a modal steals focus and the anchored panel
   hides on deactivate.
 - **The hotkey has its own message-only window** (`GlobalHotkey`), independent of the panel's.
+- **Process ↔ app attribution is by install folder** (`ResourceAttribution`), deepest root wins,
+  generic folders (Program Files, AppData…) are never roots. Do not "improve" it with name matching.
+- **Resources are sampled only while the panel is visible** (`DockWindow` IsVisible → Start/StopMonitoring).
+- **Batches stop on Cancelled**, continue on Failed. Resolve all keys from one snapshot.
+- **Auto-backup skips partial snapshots** and rewrites only when content changed (`HasSameContentAs`).
+- **`VelopackApp.Build().Run()` must stay the first line of `Main`.** User settings never go in the
+  install folder: Velopack replaces it on update.
+- **Anchored panel + dialogs:** wrap any picker/dialog in `DockWindow.SuspendAutoHide()`, or the
+  panel hides when the dialog takes focus.
 
 ## Known limits
 

@@ -18,16 +18,22 @@
 ---
 
 Windows makes managing installed software tedious: *Settings › Installed apps* cannot update
-anything, WinGet is a console, and the Store only knows its own apps. **Software Dock** lives in
-the notification area and opens a panel on the right edge of the screen with everything that is
-installed, what can be updated, and a search box over the WinGet and Microsoft Store catalogs.
+anything or remove more than one app at a time, WinGet is a console, and the Store only knows its
+own apps. **Software Dock** lives in the notification area and opens a panel on the right edge of
+the screen with everything that is installed, what can be updated, what is running and how much
+it uses, and a search box over the WinGet and Microsoft Store catalogs.
 
 The same capabilities are exposed as an **MCP server**, so Claude Code, Copilot or any MCP client
-can answer *"what do I have installed?"*, *"update everything"* or *"install VLC"*.
+can answer *"what do I have installed?"*, *"what is eating my memory?"*, *"update everything"* or
+*"install VLC"*.
 
-| Installed | Updates | Discover |
+| Installed + gauges | Bulk uninstall | Settings |
 | --- | --- | --- |
-| ![Installed apps](docs/images/dock-installed.png) | ![Updates](docs/images/dock-updates.png) | ![Discover](docs/images/dock-discover.png) |
+| ![Installed apps with CPU and memory](docs/images/dock-installed.png) | ![Several apps selected for removal](docs/images/dock-select.png) | ![Settings](docs/images/dock-settings.png) |
+
+| Updates | Discover | Restore from backup |
+| --- | --- | --- |
+| ![Updates](docs/images/dock-updates.png) | ![Discover](docs/images/dock-discover.png) | ![Restore](docs/images/dock-restore.png) |
 
 *Rendered by the headless UI tests from the real window, in demo mode.*
 
@@ -35,20 +41,40 @@ can answer *"what do I have installed?"*, *"update everything"* or *"install VLC
 
 - **Tray icon as a status light** — green: up to date · amber: updates waiting · blue: working ·
   red: the inventory could not be read. Click it, or press **Win+Shift+I**, to toggle the panel.
+  Updates are checked in the background every 6 hours, so the tray turns amber on its own.
 - **📌 Anchored / 🪟 floating** — anchored, the panel hugs the right edge at full height and hides
   when it loses focus; floating, it is a normal draggable window.
 - **One inventory** — the `Uninstall` registry keys (what *Installed apps* shows) reconciled with
-  WinGet (ids, available updates) and MSIX/Store apps.
+  WinGet (ids, available updates) and MSIX/Store apps, with real icons.
+- **Bulk uninstall** — *Select*, tick several apps (or *All*), *Uninstall*: they are removed one
+  after another. Something Windows itself does not offer.
 - **Update one or all**, **install** from the catalog, **uninstall** anything — through WinGet when
   it knows the app, otherwise through the app's own uninstaller (silently for MSI and
   `QuietUninstallString`, never with guessed switches).
-- **Start with Windows**, single instance (a second launch just opens the panel), per-monitor DPI.
+- **CPU and memory gauges** — for the machine and for every running app, measured only while the
+  panel is open. Sort by *memory in use* to find the heavy ones.
+- **Backups that survive a reinstall** — an automatic backup in `Documents\Software Dock` (OneDrive
+  usually syncs it), updated whenever your software changes, in two formats: Software Dock's, and
+  WinGet's, which restores a new PC with nothing but `winget import -i software-winget.json`.
+  *Restore from backup* lists what is missing, ticks it all, installs it in one go, and names the
+  apps you will need to fetch by hand.
+- **Start with Windows**, single instance, per-monitor DPI, settings per user.
+- **Updates itself** from GitHub releases (Velopack): it downloads in the background and offers
+  *Restart to update*.
 - **MCP server** with discovery instructions, tool annotations and a `--read-only` mode.
 
-## Getting started
+## Install
 
-Requirements: Windows 10 1809+ / Windows 11, [.NET 10 runtime](https://dotnet.microsoft.com/download/dotnet/10.0),
-and WinGet (*App Installer*, preinstalled on current Windows).
+Download **`SoftwareDock-win-Setup.exe`** from the [latest release](https://github.com/molidestroyer/windows-software-mcp/releases/latest)
+and run it. It installs per user (no admin) to `%LOCALAPPDATA%\SoftwareDock`, adds a Start-menu
+entry and starts in the tray. A portable zip is attached to every release too.
+
+The installer is not code-signed yet, so SmartScreen may ask you to confirm the first time.
+
+## Build from source
+
+Requirements: [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0) and WinGet
+(*App Installer*, preinstalled on current Windows).
 
 ```bash
 dotnet run --project src/SoftwareDock.App
@@ -60,21 +86,27 @@ Without touching your machine (in-memory demo PC):
 dotnet run --project src/SoftwareDock.App -- --demo
 ```
 
-Build, test and publish:
+Test:
 
 ```bash
 dotnet test SoftwareDock.slnx
 ```
 
+`appsettings.json` next to the executable configures the hotkey and panel width; everything you
+change in ⚙️ is stored in `%LOCALAPPDATA%\SoftwareDock\settings.json`.
+
+## Releasing
+
+Push a tag; CI tests, publishes self-contained, packs with Velopack and creates the release that
+installed docks update from:
+
 ```bash
-dotnet publish src/SoftwareDock.App -c Release -r win-x64 --self-contained false -o publish
+git tag v0.3.0
 ```
 
 ```bash
-dotnet publish src/SoftwareDock.Mcp -c Release -r win-x64 --self-contained false -o publish
+git push origin v0.3.0
 ```
-
-`appsettings.json` next to the executable configures the hotkey, panel width and cache duration.
 
 ## Connect an AI agent (MCP)
 
@@ -109,8 +141,10 @@ each tool takes and where it comes from, and to confirm changes with the user fi
 | `install_software` | changes the PC | Silent install of a `packageId` |
 | `upgrade_software` | changes the PC | Upgrade an installed app by `key` |
 | `uninstall_software` | destructive | Remove an installed app by `key` |
+| `list_running_software` | read-only | Running apps with CPU % and memory, heaviest first |
+| `export_software_backup` | read-only | Backup JSON in Software Dock or `winget import` format |
 
-Add `"args": ["--read-only"]` to expose only the first three.
+Add `"args": ["--read-only"]` to expose only the read-only tools.
 
 ## Architecture
 
@@ -131,6 +165,7 @@ Decisions worth reading before changing things:
 2. [WinGet through its CLI first, behind a port](docs/adr/0002-winget-cli-first.md)
 3. [A tray app in Avalonia, not a PowerToys module](docs/adr/0003-tray-app-not-powertoys-module.md)
 4. [MCP: discovery through instructions, safety through the domain](docs/adr/0004-mcp-discovery-and-safety.md)
+5. [Releases and self-update with Velopack](docs/adr/0005-self-update-with-velopack.md)
 
 ## How it compares
 
@@ -139,6 +174,9 @@ Decisions worth reading before changing things:
 | Lives in the tray | ✅ panel docked to the screen edge | ✅ window + tray menu | — | launcher (Win+Alt+Space) |
 | Installed apps WinGet does not know | ✅ registry reconciled | partial | — | — |
 | Update / uninstall | ✅ | ✅ (+ Scoop, Chocolatey, npm…) | — (find, install) | install |
+| Bulk uninstall | ✅ | ✅ | — | — |
+| CPU / memory per app | ✅ | — | — | — |
+| Backup / restore | ✅ (+ `winget import` format) | ✅ | — | — |
 | MCP server for agents | ✅ inventory + install/upgrade/uninstall | — | ✅ find + install | — |
 
 UniGetUI is the most complete GUI if you want many package managers. Software Dock is deliberately
